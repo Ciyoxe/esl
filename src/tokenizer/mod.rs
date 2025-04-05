@@ -67,9 +67,6 @@ impl<'a> Tokenizer<'a> {
     fn next(&self) -> Option<u8> {
         self.src.get(self.pos).copied()
     }
-    fn test(&self, f: impl FnOnce(u8) -> bool) -> bool {
-        self.src.get(self.pos).copied().is_some_and(f)
-    }
     fn next_at(&self, pos: usize) -> Option<u8> {
         self.src.get(self.pos + pos).copied()
     }
@@ -97,7 +94,7 @@ impl<'a> Tokenizer<'a> {
  *************************************************/
 impl<'a> Tokenizer<'a> {
     fn t_number(&mut self) -> Option<Token> {
-        if !self.test(|b| b.is_ascii_digit()) {
+        if !self.next_unwrap().is_ascii_digit() {
             return None;
         }
 
@@ -117,7 +114,7 @@ impl<'a> Tokenizer<'a> {
             } else {
                 this.skip(|b| b.is_ascii_digit());
 
-                if this.test(|b| b == b'.') && this.next_at(1).is_some_and(|b| b.is_ascii_digit()) {
+                if this.next().is_some_and(|b| b == b'.') && this.next_at(1).is_some_and(|b| b.is_ascii_digit()) {
                     this.mov();
                     this.mov();
                     this.skip(|b| b.is_ascii_digit());
@@ -130,7 +127,7 @@ impl<'a> Tokenizer<'a> {
         })
     }
     fn t_word(&mut self) -> Option<Token> {
-        if !self.test(|b| b.is_ascii_alphabetic() || b == b'_') {
+        if !self.next_unwrap().is_ascii_alphabetic() || self.next_unwrap() != b'_' {
             return None;
         }
 
@@ -163,10 +160,6 @@ impl<'a> Tokenizer<'a> {
         })
     }
     fn t_op(&mut self) -> Option<Token> {
-        if self.next().is_none() {
-            return None;
-        }
-
         self.make_token(|this| match this.next_unwrap() {
             b'+' => match this.next_at(1) {
                 Some(b'=') => {
@@ -313,10 +306,6 @@ impl<'a> Tokenizer<'a> {
         })
     }
     fn t_delim(&mut self) -> Option<Token> {
-        if self.next().is_none() {
-            return None;
-        }
-
         self.make_token(|this| match this.next_unwrap() {
             b',' => {
                 this.mov();
@@ -358,7 +347,7 @@ impl<'a> Tokenizer<'a> {
         })
     }
     fn t_string(&mut self) -> Option<Token> {
-        if !self.test(|b| b == b'"') {
+        if self.next_unwrap() != b'"' {
             return None;
         }
 
@@ -381,23 +370,23 @@ impl<'a> Tokenizer<'a> {
         })
     }
     fn t_attribute(&mut self) -> Option<Token> {
-        if !self.test(|b| b == b'@') {
+        if self.next_unwrap() != b'@' {
             return None;
         }
 
         self.make_token(|this| {
             this.mov();
-            if !this.test(|b| b.is_ascii_alphabetic() || b == b'_') {
+            if this.next().is_none_or(|b| !b.is_ascii_alphabetic() && b != b'_') {
                 return Some(TokenKind::ErrAttr);
             }
+
             this.mov();
             this.skip(|b| b.is_ascii_alphanumeric() || b == b'_');
-
             Some(TokenKind::Attribute)
         })
     }
     fn t_doc(&mut self) -> Option<Token> {
-        if self.next().is_some_and(|b| b == b'/')
+        if     self.next_unwrap() == b'/'
             && self.next_at(1).is_some_and(|b| b == b'/')
             && self.next_at(2).is_some_and(|b| b == b'/')
         {
@@ -414,9 +403,6 @@ impl<'a> Tokenizer<'a> {
     }
 
     fn skip_error(&mut self) -> Option<Token> {
-        if self.next().is_none() {
-            return None;
-        }
         self.make_token(|this| {
             this.mov();
             this.skip(|b| !b.is_ascii_alphanumeric() && b != b'_' && b != b'@' && b != b';');
@@ -441,6 +427,10 @@ impl<'a> Tokenizer<'a> {
         }
     }
     fn next_token(&mut self) -> Option<Token> {
+            if self.next().is_none() {
+                return None;
+            }
+
                         self.t_word()
             .or_else(|| self.t_delim())
             .or_else(|| self.t_number())
