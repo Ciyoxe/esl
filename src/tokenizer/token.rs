@@ -1,6 +1,6 @@
 #[derive(Debug, Clone, PartialEq)]
 pub struct Token {
-    pub range: std::ops::Range<u32>,
+    pub range: std::ops::Range<usize>,
     pub kind: TokenKind,
 }
 
