@@ -73,8 +73,8 @@ impl<'a> Tokenizer<'a> {
     fn next_at(&self, pos: usize) -> Option<u8> {
         self.src.get(self.pos + pos).copied()
     }
-    fn next_unchecked(&self) -> u8 {
-        unsafe { self.src.get_unchecked(self.pos).clone() }
+    fn next_unwrap(&self) -> u8 {
+        self.src[self.pos]
     }
 
     fn make_token(&mut self, f: impl FnOnce(&mut Self) -> Option<TokenKind>) -> Option<Token> {
@@ -102,13 +102,13 @@ impl<'a> Tokenizer<'a> {
         }
 
         self.make_token(|this| {
-            if this.next_unchecked() == b'0' && this.next_at(1).is_some_and(|b| b == b'b') {
+            if this.next_unwrap() == b'0' && this.next_at(1).is_some_and(|b| b == b'b') {
                 this.mov();
                 this.mov();
                 this.skip(|b| b == b'0' || b == b'1');
 
                 Some(TokenKind::NumBinInt)
-            } else if this.next_unchecked() == b'0' && this.next_at(1).is_some_and(|b| b == b'x') {
+            } else if this.next_unwrap() == b'0' && this.next_at(1).is_some_and(|b| b == b'x') {
                 this.mov();
                 this.mov();
                 this.skip(|b| b.is_ascii_hexdigit());
@@ -138,7 +138,7 @@ impl<'a> Tokenizer<'a> {
             match this.skip_and_get(|b| b.is_ascii_alphanumeric() || b == b'_') {
                 b"as" => Some(TokenKind::OpAs),
                 b"if" => Some(TokenKind::KwIf),
-                b"el" => Some(TokenKind::KwEl),
+                b"or" => Some(TokenKind::KwOr),
                 b"in" => Some(TokenKind::KwIn),
                 b"for" => Some(TokenKind::KwFor),
                 b"let" => Some(TokenKind::KwLet),
@@ -167,8 +167,8 @@ impl<'a> Tokenizer<'a> {
             return None;
         }
 
-        self.make_token(|this| match this.next() {
-            Some(b'+') => match this.next_at(1) {
+        self.make_token(|this| match this.next_unwrap() {
+            b'+' => match this.next_at(1) {
                 Some(b'=') => {
                     this.mov();
                     this.mov();
@@ -179,7 +179,7 @@ impl<'a> Tokenizer<'a> {
                     Some(TokenKind::OpAdd)
                 }
             },
-            Some(b'-') => match this.next_at(1) {
+            b'-' => match this.next_at(1) {
                 Some(b'>') => {
                     this.mov();
                     this.mov();
@@ -195,7 +195,7 @@ impl<'a> Tokenizer<'a> {
                     Some(TokenKind::OpSub)
                 }
             },
-            Some(b'*') => match this.next_at(1) {
+            b'*' => match this.next_at(1) {
                 Some(b'=') => {
                     this.mov();
                     this.mov();
@@ -206,7 +206,7 @@ impl<'a> Tokenizer<'a> {
                     Some(TokenKind::OpMul)
                 }
             },
-            Some(b'/') => match this.next_at(1) {
+            b'/' => match this.next_at(1) {
                 Some(b'=') => {
                     this.mov();
                     this.mov();
@@ -217,7 +217,7 @@ impl<'a> Tokenizer<'a> {
                     Some(TokenKind::OpDiv)
                 }
             },
-            Some(b'%') => match this.next_at(1) {
+            b'%' => match this.next_at(1) {
                 Some(b'=') => {
                     this.mov();
                     this.mov();
@@ -228,7 +228,7 @@ impl<'a> Tokenizer<'a> {
                     Some(TokenKind::OpMod)
                 }
             },
-            Some(b'>') => match this.next_at(1) {
+            b'>' => match this.next_at(1) {
                 Some(b'=') => {
                     this.mov();
                     this.mov();
@@ -239,7 +239,7 @@ impl<'a> Tokenizer<'a> {
                     Some(TokenKind::OpGt)
                 }
             },
-            Some(b'<') => match this.next_at(1) {
+            b'<' => match this.next_at(1) {
                 Some(b'=') => {
                     this.mov();
                     this.mov();
@@ -250,7 +250,7 @@ impl<'a> Tokenizer<'a> {
                     Some(TokenKind::OpLt)
                 }
             },
-            Some(b'!') => match this.next_at(1) {
+            b'!' => match this.next_at(1) {
                 Some(b'=') => {
                     this.mov();
                     this.mov();
@@ -261,7 +261,7 @@ impl<'a> Tokenizer<'a> {
                     Some(TokenKind::OpNot)
                 }
             },
-            Some(b'=') => match this.next_at(1) {
+            b'=' => match this.next_at(1) {
                 Some(b'=') => {
                     this.mov();
                     this.mov();
@@ -272,7 +272,7 @@ impl<'a> Tokenizer<'a> {
                     Some(TokenKind::OpAsg)
                 }
             },
-            Some(b'|') => match this.next_at(1) {
+            b'|' => match this.next_at(1) {
                 Some(b'=') => {
                     this.mov();
                     this.mov();
@@ -283,7 +283,7 @@ impl<'a> Tokenizer<'a> {
                     Some(TokenKind::OpOr)
                 }
             },
-            Some(b'&') => match this.next_at(1) {
+            b'&' => match this.next_at(1) {
                 Some(b'=') => {
                     this.mov();
                     this.mov();
@@ -294,7 +294,7 @@ impl<'a> Tokenizer<'a> {
                     Some(TokenKind::OpAnd)
                 }
             },
-            Some(b'.') => match this.next_at(1) {
+            b'.' => match this.next_at(1) {
                 Some(b'.') => {
                     this.mov();
                     this.mov();
@@ -305,7 +305,7 @@ impl<'a> Tokenizer<'a> {
                     Some(TokenKind::OpDot)
                 }
             },
-            Some(b'?') => {
+            b'?' => {
                 this.mov();
                 Some(TokenKind::OpErr)
             }
@@ -317,40 +317,40 @@ impl<'a> Tokenizer<'a> {
             return None;
         }
 
-        self.make_token(|this| match this.next() {
-            Some(b',') => {
+        self.make_token(|this| match this.next_unwrap() {
+            b',' => {
                 this.mov();
                 Some(TokenKind::Comma)
             }
-            Some(b':') => {
+            b':' => {
                 this.mov();
                 Some(TokenKind::Colon)
             }
-            Some(b';') => {
+            b';' => {
                 this.mov();
                 Some(TokenKind::Semicolon)
             }
-            Some(b'(') => {
+            b'(' => {
                 this.mov();
                 Some(TokenKind::RoundL)
             }
-            Some(b')') => {
+            b')' => {
                 this.mov();
                 Some(TokenKind::RoundR)
             }
-            Some(b'[') => {
+            b'[' => {
                 this.mov();
                 Some(TokenKind::SquareL)
             }
-            Some(b']') => {
+            b']' => {
                 this.mov();
                 Some(TokenKind::SquareR)
             }
-            Some(b'{') => {
+            b'{' => {
                 this.mov();
                 Some(TokenKind::CurvedL)
             }
-            Some(b'}') => {
+            b'}' => {
                 this.mov();
                 Some(TokenKind::CurvedR)
             }
@@ -430,7 +430,8 @@ impl<'a> Tokenizer<'a> {
                 self.mov();
                 continue;
             }
-            if b == b'/' && self.next_at(1).is_some_and(|b| b == b'/') {
+            // Ensure that we don't skip a doc comment
+            if b == b'/' && self.next_at(1).is_some_and(|b| b == b'/') && self.next_at(2).is_none_or(|b| b != b'/') {
                 self.mov();
                 self.mov();
                 self.skip(|b| b != b'\n');
@@ -440,13 +441,13 @@ impl<'a> Tokenizer<'a> {
         }
     }
     fn next_token(&mut self) -> Option<Token> {
-                        self.t_op()
-            .or_else(|| self.t_word())
-            .or_else(|| self.t_number())
+                        self.t_word()
             .or_else(|| self.t_delim())
+            .or_else(|| self.t_number())
+            .or_else(|| self.t_doc()) // WARN: doc should go before op, to not match /// as three divisions
+            .or_else(|| self.t_op())
             .or_else(|| self.t_string())
             .or_else(|| self.t_attribute())
-            .or_else(|| self.t_doc())
             .or_else(|| self.skip_error())
     }
 }

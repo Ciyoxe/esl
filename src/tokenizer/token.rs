@@ -52,7 +52,7 @@ pub enum TokenKind {
 
     // Keywords
     KwIf,
-    KwEl,
+    KwOr,
     KwMatch,
     KwFor,
     KwIn,
