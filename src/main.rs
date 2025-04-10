@@ -1,4 +1,5 @@
 pub mod tokenizer;
+pub mod parser;
 
 fn main() {
     let src = "\"some str\"\"".as_bytes();
