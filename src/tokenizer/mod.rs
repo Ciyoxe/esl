@@ -8,6 +8,7 @@ use token::{Token, TokenKind};
 pub struct Tokenizer<'a> {
     pub pos: usize,
     pub src: &'a [u8],
+    pub braces_stack: Vec<u8>,
 }
 pub struct TokensIterator<'a> {
     tokenizer: Tokenizer<'a>,
@@ -18,7 +19,7 @@ pub struct TokensIterator<'a> {
  *************************************************/
 impl<'a> Tokenizer<'a> {
     pub fn new(src: &'a [u8]) -> Self {
-        Tokenizer { pos: 0, src }
+        Tokenizer { pos: 0, src, braces_stack: Vec::new() }
     }
     pub fn print_debug(self) {
         let src = self.src;
@@ -320,27 +321,45 @@ impl<'a> Tokenizer<'a> {
             }
             b'(' => {
                 this.mov();
+                this.braces_stack.push(b'(');
                 Some(TokenKind::RoundL)
-            }
-            b')' => {
-                this.mov();
-                Some(TokenKind::RoundR)
             }
             b'[' => {
                 this.mov();
+                this.braces_stack.push(b'[');
                 Some(TokenKind::SquareL)
-            }
-            b']' => {
-                this.mov();
-                Some(TokenKind::SquareR)
             }
             b'{' => {
                 this.mov();
+                this.braces_stack.push(b'{');
                 Some(TokenKind::CurvedL)
+            }
+            b')' => {
+                this.mov();
+                if this.braces_stack.last().is_some_and(|b| *b == b'(') {
+                    this.braces_stack.pop();
+                    Some(TokenKind::RoundR)
+                } else {
+                    Some(TokenKind::ErrBrace)
+                }
+            }
+            b']' => {
+                this.mov();
+                if this.braces_stack.last().is_some_and(|b| *b == b'[') {
+                    this.braces_stack.pop();
+                    Some(TokenKind::SquareR)
+                } else {
+                    Some(TokenKind::ErrBrace)
+                }
             }
             b'}' => {
                 this.mov();
-                Some(TokenKind::CurvedR)
+                if this.braces_stack.last().is_some_and(|b| *b == b'{') {
+                    this.braces_stack.pop();
+                    Some(TokenKind::CurvedR)
+                } else {
+                    Some(TokenKind::ErrBrace)
+                }
             }
             _ => None,
         })
@@ -427,7 +446,12 @@ impl<'a> Tokenizer<'a> {
     }
     fn next_token(&mut self) -> Option<Token> {
         if self.next().is_none() {
-            return None;
+            return if self.braces_stack.is_empty() {
+                None
+            } else {
+                self.braces_stack.clear();
+                self.make_token(|_| Some(TokenKind::ErrBrace))
+            }
         }
 
                         self.t_word()

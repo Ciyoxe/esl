@@ -97,4 +97,5 @@ pub enum TokenKind {
     ErrStr,         // unclosed string
     ErrNum,         // wrong number format
     ErrAttr,        // wrong attribute format
+    ErrBrace,       // unclosed brace, or wrong brace sequence like '({)}'
 }
