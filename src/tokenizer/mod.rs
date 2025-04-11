@@ -301,15 +301,15 @@ impl<'a> Tokenizer<'a> {
                 this.mov();
                 Some(TokenKind::OpErr)
             }
+            b',' => {
+                this.mov();
+                Some(TokenKind::OpComma)
+            }
             _ => None,
         })
     }
     fn t_delim(&mut self) -> Option<Token> {
         self.make_token(|this| match this.next_unwrap() {
-            b',' => {
-                this.mov();
-                Some(TokenKind::Comma)
-            }
             b':' => {
                 this.mov();
                 Some(TokenKind::Colon)

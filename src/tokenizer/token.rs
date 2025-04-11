@@ -40,6 +40,7 @@ pub enum TokenKind {
     OpAnd,          // &
     OpNot,          // !
     OpDot,          // .
+    OpComma,        // ,
     OpRng,          // ..
     OpErr,          // ?
     OpLam,          // ->
@@ -76,7 +77,6 @@ pub enum TokenKind {
     KwFalse,
 
     // Delimiters
-    Comma,          // ,
     Colon,          // :
     Semicolon,      // ;
     RoundL,         // (
