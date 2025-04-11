@@ -11,6 +11,9 @@ impl Token {
             kind
         }
     }
+    pub fn is(&self, kind: TokenKind) -> bool { 
+        self.kind == kind 
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

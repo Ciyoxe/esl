@@ -1,4 +1,4 @@
-use token::{ Token, TokenKind };
+use token::{Token, TokenKind};
 
 pub mod token;
 
@@ -16,7 +16,7 @@ pub struct TokensIterator<'a> {
 /*************************************************
  *               PUBLIC INTERFACE                *
  *************************************************/
- impl <'a> Tokenizer<'a> {
+impl<'a> Tokenizer<'a> {
     pub fn new(src: &'a [u8]) -> Self {
         Tokenizer { pos: 0, src }
     }
@@ -32,7 +32,7 @@ pub struct TokensIterator<'a> {
 impl<'a> IntoIterator for Tokenizer<'a> {
     type Item = Token;
     type IntoIter = TokensIterator<'a>;
-    
+
     fn into_iter(self) -> Self::IntoIter {
         TokensIterator { tokenizer: self }
     }
@@ -87,7 +87,6 @@ impl<'a> Tokenizer<'a> {
         None
     }
 }
-
 
 /*************************************************
  *                TOKEN MATCHERS                 *
@@ -406,7 +405,7 @@ impl<'a> Tokenizer<'a> {
         self.make_token(|this| {
             this.mov();
             this.skip(|b| !b.is_ascii_alphanumeric() && b != b'_' && b != b'@' && b != b';');
-    
+
             Some(TokenKind::ErrChar)
         })
     }
@@ -427,9 +426,9 @@ impl<'a> Tokenizer<'a> {
         }
     }
     fn next_token(&mut self) -> Option<Token> {
-            if self.next().is_none() {
-                return None;
-            }
+        if self.next().is_none() {
+            return None;
+        }
 
                         self.t_word()
             .or_else(|| self.t_delim())
