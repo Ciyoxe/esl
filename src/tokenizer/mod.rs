@@ -1,6 +1,6 @@
-use token::{Token, TokenKind};
-
 pub mod token;
+
+use token::{Token, TokenKind};
 
 /*************************************************
  *                    STRUCTS                    *
