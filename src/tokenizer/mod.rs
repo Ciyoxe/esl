@@ -2,16 +2,10 @@ pub mod token;
 
 use token::{Token, TokenKind};
 
-/*************************************************
- *                    STRUCTS                    *
- *************************************************/
 pub struct Tokenizer<'a> {
     pub pos: usize,
     pub src: &'a [u8],
-    pub braces_stack: Vec<u8>,
-}
-pub struct TokensIterator<'a> {
-    tokenizer: Tokenizer<'a>,
+    pub tokens: Vec<Token>,
 }
 
 /*************************************************
@@ -19,31 +13,27 @@ pub struct TokensIterator<'a> {
  *************************************************/
 impl<'a> Tokenizer<'a> {
     pub fn new(src: &'a [u8]) -> Self {
-        Tokenizer { pos: 0, src, braces_stack: Vec::new() }
+        Tokenizer {
+            src,
+            pos: 0,
+            tokens: Vec::new(),
+        }
     }
-    pub fn print_debug(self) {
-        let src = self.src;
-        self.into_iter().for_each(|token| {
-            let content = &src[token.range.clone()];
-            let con_str = String::from_utf8_lossy(content);
+    pub fn tokenize(&mut self) {
+        loop {
+            self.skip_ignored();
+            match self.next_token() {
+                None => break,
+                Some(t) => self.tokens.push(t),
+            }
+        }
+    }
+    pub fn print_tokens(&self) {
+        for token in self.tokens.iter() {
+            let content = &self.src[token.range.clone()];
+            let con_str = std::str::from_utf8(content).unwrap();
             println!("{:#?} -> {}", token.kind, con_str);
-        });
-    }
-}
-impl<'a> IntoIterator for Tokenizer<'a> {
-    type Item = Token;
-    type IntoIter = TokensIterator<'a>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        TokensIterator { tokenizer: self }
-    }
-}
-impl Iterator for TokensIterator<'_> {
-    type Item = Token;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.tokenizer.skip_ignored();
-        self.tokenizer.next_token()
+        }
     }
 }
 
@@ -321,45 +311,27 @@ impl<'a> Tokenizer<'a> {
             }
             b'(' => {
                 this.mov();
-                this.braces_stack.push(b'(');
                 Some(TokenKind::RoundL)
             }
             b'[' => {
                 this.mov();
-                this.braces_stack.push(b'[');
                 Some(TokenKind::SquareL)
             }
             b'{' => {
                 this.mov();
-                this.braces_stack.push(b'{');
                 Some(TokenKind::CurvedL)
             }
             b')' => {
                 this.mov();
-                if this.braces_stack.last().is_some_and(|b| *b == b'(') {
-                    this.braces_stack.pop();
-                    Some(TokenKind::RoundR)
-                } else {
-                    Some(TokenKind::ErrBrace)
-                }
+                Some(TokenKind::RoundR)
             }
             b']' => {
                 this.mov();
-                if this.braces_stack.last().is_some_and(|b| *b == b'[') {
-                    this.braces_stack.pop();
-                    Some(TokenKind::SquareR)
-                } else {
-                    Some(TokenKind::ErrBrace)
-                }
+                Some(TokenKind::SquareR)
             }
             b'}' => {
                 this.mov();
-                if this.braces_stack.last().is_some_and(|b| *b == b'{') {
-                    this.braces_stack.pop();
-                    Some(TokenKind::CurvedR)
-                } else {
-                    Some(TokenKind::ErrBrace)
-                }
+                Some(TokenKind::CurvedR)
             }
             _ => None,
         })
@@ -384,7 +356,7 @@ impl<'a> Tokenizer<'a> {
                 }
                 this.mov();
             }
-            Some(TokenKind::ErrStr)
+            Some(TokenKind::ErrUnterminatedString)
         })
     }
     fn t_attribute(&mut self) -> Option<Token> {
@@ -395,7 +367,7 @@ impl<'a> Tokenizer<'a> {
         self.make_token(|this| {
             this.mov();
             if this.next().is_none_or(|b| !b.is_ascii_alphabetic() && b != b'_') {
-                return Some(TokenKind::ErrAttr);
+                return Some(TokenKind::ErrAttributeName);
             }
 
             this.mov();
@@ -425,7 +397,7 @@ impl<'a> Tokenizer<'a> {
             this.mov();
             this.skip(|b| !b.is_ascii_alphanumeric() && b != b'_' && b != b'@' && b != b';');
 
-            Some(TokenKind::ErrChar)
+            Some(TokenKind::ErrUnexpectedChar)
         })
     }
     fn skip_ignored(&mut self) {
@@ -446,15 +418,9 @@ impl<'a> Tokenizer<'a> {
     }
     fn next_token(&mut self) -> Option<Token> {
         if self.next().is_none() {
-            return if self.braces_stack.is_empty() {
-                None
-            } else {
-                self.braces_stack.clear();
-                self.make_token(|_| Some(TokenKind::ErrBrace))
-            }
+            return None;
         }
-
-                        self.t_word()
+        self.t_word()
             .or_else(|| self.t_delim())
             .or_else(|| self.t_number())
             .or_else(|| self.t_doc()) // WARN: doc should go before op, to not match /// as three divisions
