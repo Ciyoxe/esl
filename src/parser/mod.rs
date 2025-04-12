@@ -3,6 +3,7 @@ pub mod operations;
 
 use crate::tokenizer::token::{Token, TokenKind};
 use node::{Node, NodeKind};
+use operations::OperationSettings;
 
 pub struct Parser<'a> {
     pub pos: usize,
@@ -36,6 +37,9 @@ impl<'a> Parser<'a> {
     fn next_unwrap(&self) -> &Token {
         &self.tokens[self.pos]
     }
+    fn mov(&mut self) {
+        self.pos += 1;
+    }
 
     fn make_node(&mut self, f: impl FnOnce(&mut Self) -> Option<NodeKind>) -> Option<Node> {
         let pos = self.pos;
@@ -66,36 +70,97 @@ impl<'a> Parser<'a> {
 
             match next_token.kind {
                 TokenKind::NumBinInt => {
-                    let src_slice = std::str::from_utf8(&src_bytes[2..]).unwrap();
-                    Some(NodeKind::IntegerLiteral {
-                        value: u64::from_str_radix(src_slice, 2).unwrap(),
-                    })
+                    this.mov();
+
+                    let slice = std::str::from_utf8(&src_bytes[2..]).unwrap();
+                    let value = u64::from_str_radix(slice, 2);
+
+                    match value {
+                        Ok(value) => Some(NodeKind::IntegerLiteral { value }),
+                        Err(_) => Some(NodeKind::ErrNumberOverflow),
+                    }
                 }
                 TokenKind::NumHexInt => {
-                    let src_slice = std::str::from_utf8(&src_bytes[2..]).unwrap();
-                    Some(NodeKind::IntegerLiteral {
-                        value: u64::from_str_radix(src_slice, 16).unwrap(),
-                    })
+                    this.mov();
+
+                    let slice = std::str::from_utf8(&src_bytes[2..]).unwrap();
+                    let value = u64::from_str_radix(slice, 16);
+
+                    match value {
+                        Ok(value) => Some(NodeKind::IntegerLiteral { value }),
+                        Err(_) => Some(NodeKind::ErrNumberOverflow),
+                    }
                 }
                 TokenKind::NumDecInt => {
-                    let src_slice = std::str::from_utf8(src_bytes).unwrap();
-                    Some(NodeKind::IntegerLiteral {
-                        value: src_slice.parse().unwrap(),
-                    })
+                    this.mov();
+
+                    let slice = std::str::from_utf8(src_bytes).unwrap();
+                    let value = slice.parse();
+
+                    match value {
+                        Ok(value) => Some(NodeKind::IntegerLiteral { value }),
+                        Err(_) => Some(NodeKind::ErrNumberOverflow),
+                    }
                 }
                 TokenKind::NumDecFloat => {
-                    let src_slice = std::str::from_utf8(src_bytes).unwrap();
-                    Some(NodeKind::FloatingLiteral {
-                        value: src_slice.parse().unwrap(),
+                    this.mov();
+
+                    let slice = std::str::from_utf8(src_bytes).unwrap();
+                    let value = slice.parse();
+
+                    match value {
+                        Ok(value) => Some(NodeKind::FloatingLiteral { value }),
+                        Err(_) => Some(NodeKind::ErrNumberOverflow),
+                    }
+                }
+                TokenKind::KwTrue => {
+                    this.mov();
+
+                    Some(NodeKind::BooleanLiteral { value: true })
+                }
+                TokenKind::KwFalse => {
+                    this.mov();
+
+                    Some(NodeKind::BooleanLiteral { value: false })
+                }
+                TokenKind::String => {
+                    this.mov();
+
+                    // TODO: handle escape sequences and missing quotes
+                    Some(NodeKind::StringLiteral {
+                        value: src_bytes.to_vec(),
                     })
                 }
-                TokenKind::KwTrue => Some(NodeKind::BooleanLiteral { value: true }),
-                TokenKind::KwFalse => Some(NodeKind::BooleanLiteral { value: false }),
-                TokenKind::String => Some(NodeKind::StringLiteral { value: src_bytes.to_vec() }),
-                TokenKind::Identifier => Some(NodeKind::Identifier { name: src_bytes.to_vec() }),
+                TokenKind::Identifier => {
+                    this.mov();
+
+                    Some(NodeKind::Identifier {
+                        name: src_bytes.to_vec(),
+                    })
+                }
 
                 _ => None,
             }
         })
+    }
+
+    pub fn p_expressionable(&mut self) -> Option<Node> {
+        self.p_primitive()
+    }
+
+    pub fn p_expression(&mut self) -> Option<Node> {
+        enum ExpressionPart {
+            Atom(Node),
+            Operation(OperationSettings),
+        }
+
+        let mut expression_parts = Vec::<ExpressionPart>::new();
+        let mut brackets_stack = Vec::<TokenKind>::new();
+
+        while let Some(token) = self.next() {
+            todo!()
+        }
+
+        None
     }
 }

@@ -57,7 +57,7 @@ pub struct OperationSettings {
 }
 
 impl OperationSettings {
-    pub fn for_token(token_kind: TokenKind) -> &'static [Self] {
+    pub fn for_exact_token(token_kind: TokenKind) -> &'static [Self] {
         match token_kind {
             TokenKind::OpAdd => &[Self {
                 precedence: 6,
@@ -223,6 +223,12 @@ impl OperationSettings {
                 arity: OperationArity::Binary,
                 precedence: 8,
             }],
+
+            _ => &[],
+        }
+    }
+    pub fn for_call(next_brace_token_kind: TokenKind) -> &'static [Self] {
+        match next_brace_token_kind {
             TokenKind::RoundL => &[Self {
                 kind: OperationKind::FuncCall,
                 arity: OperationArity::Binary,

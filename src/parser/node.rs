@@ -37,7 +37,7 @@ pub enum NodeKind {
         arguments: Vec<Node>,
     },
 
-    Error {
-        message: &'static str,
-    },
+    // Errors
+    ErrNumberOverflow,
+    ErrMissingOperand,
 }
