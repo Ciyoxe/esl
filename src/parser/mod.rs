@@ -1,7 +1,9 @@
 pub mod node;
 pub mod operations;
+pub mod expressions;
 
 use crate::tokenizer::token::{Token, TokenKind};
+use expressions::ExpressionFlatPart;
 use node::{Node, NodeKind};
 use operations::OperationSettings;
 
@@ -144,21 +146,39 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub fn p_expressionable(&mut self) -> Option<Node> {
+    pub fn p_expression_atom(&mut self) -> Option<Node> {
         self.p_primitive()
     }
 
     pub fn p_expression(&mut self) -> Option<Node> {
-        enum ExpressionPart {
-            Atom(Node),
-            Operation(OperationSettings),
-        }
-
-        let mut expression_parts = Vec::<ExpressionPart>::new();
-        let mut brackets_stack = Vec::<TokenKind>::new();
+        let mut expression_parts = Vec::<ExpressionFlatPart>::new();
+        let mut expression_errors = Vec::<Node>::new();
+        let mut braces_stack = Vec::<TokenKind>::new();
 
         while let Some(token) = self.next() {
-            todo!()
+            match token.kind {
+                TokenKind::Semicolon => break,
+
+                TokenKind::RoundL => braces_stack.push(token.kind),
+                TokenKind::SquareL => braces_stack.push(token.kind),
+                TokenKind::CurlyL => braces_stack.push(token.kind), 
+
+                TokenKind::RoundR => {
+                    match braces_stack.pop() {
+                        Some(TokenKind::RoundL) => {},
+                        Some(TokenKind::CurlyL) | Some(TokenKind::SquareL) => {
+                            expression_errors.push(Node {
+                                kind: NodeKind::ErrMismatchedBrace,
+                                range: token.range.clone(),
+                            });
+                        },
+                        None => break,
+                        _ => todo!(),
+                    }
+
+                }
+                _ => {}
+            }
         }
 
         None

@@ -5,7 +5,9 @@ pub struct Node {
 }
 
 pub enum NodeKind {
-    // Literals
+    /*************************************************
+     *                  PRIMITIVES                   *
+     *************************************************/
     IntegerLiteral {
         value: u64,
     },
@@ -18,26 +20,37 @@ pub enum NodeKind {
     StringLiteral {
         value: Vec<u8>,
     },
-
-    // Expressions
     Identifier {
         name: Vec<u8>,
     },
 
-    /// Operands can be None for unary operations (or nullary as '(..)' full range)  
-    /// Operands -> another Operation, Identifier, Literal, Call or Expressionable construction (if branch, for example)
+    /*************************************************
+     *                  EXPRESSIONS                  *
+     *************************************************/
+     Expression {
+         /// Errors related to braces
+         errors: Vec<Node>,
+         root: Box<Node>,
+    },
+    ExpressionList {
+        /// Comma separated expressions, can be empty in calls like `f()`
+        expressions: Vec<Node>,
+    },
     Operation {
         left_operand: Option<Box<Node>>,
+        /// ExpressionList for calls or ctors
         right_operand: Option<Box<Node>>,
     },
-    /// Callable is part that called (most likely Identifier, but can be expression like `(a + b)(someArg)`)  
-    /// Arguments -> any expression parts (like Operations, Literals, etc)
-    Call {
-        callable: Box<Node>,
-        arguments: Vec<Node>,
-    },
 
-    // Errors
+    /*************************************************
+     *                    ERRORS                     *
+     *************************************************/
+    /// If numeric literal is bigger than u64::MAX
     ErrNumberOverflow,
+    /// If brace is mismatched like `(a + b}`
+    ErrMismatchedBrace,
+    /// If brace is unclosed like `(a + b` or `{a + b`
+    ErrUnclosedBrace,
+    /// If there is missing operand like `a +` or `(a +`
     ErrMissingOperand,
 }

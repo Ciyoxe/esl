@@ -80,8 +80,8 @@ pub enum TokenKind {
     RoundR,    // )
     SquareL,   // [
     SquareR,   // ]
-    CurvedL,   // {
-    CurvedR,   // }
+    CurlyL,   // {
+    CurlyR,   // }
 
     // Other tokens
     Attribute,  // @attr

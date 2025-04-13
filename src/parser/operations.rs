@@ -234,7 +234,7 @@ impl OperationSettings {
                 arity: OperationArity::Binary,
                 precedence: 11,
             }],
-            TokenKind::CurvedL => &[Self {
+            TokenKind::CurlyL => &[Self {
                 kind: OperationKind::ValueCtor,
                 arity: OperationArity::Binary,
                 precedence: 11,

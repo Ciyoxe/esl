@@ -319,7 +319,7 @@ impl<'a> Tokenizer<'a> {
             }
             b'{' => {
                 this.mov();
-                Some(TokenKind::CurvedL)
+                Some(TokenKind::CurlyL)
             }
             b')' => {
                 this.mov();
@@ -331,7 +331,7 @@ impl<'a> Tokenizer<'a> {
             }
             b'}' => {
                 this.mov();
-                Some(TokenKind::CurvedR)
+                Some(TokenKind::CurlyR)
             }
             _ => None,
         })
