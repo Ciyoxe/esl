@@ -167,8 +167,8 @@ impl<'a> Parser<'a> {
 
                 TokenKind::RoundL | TokenKind::SquareL | TokenKind::CurlyL => {
                     match expression_parts.last() {
-                        // `identifier(` => `identifier call (`
-                        // `)(` => `) call (`
+                        // `x(a, b)` => `x call (a, b)`
+                        // `(x)(a, b)` => `(x) call (a, b)`
                         Some(ExpressionFlatPart::Atom{ node: Node{ kind: NodeKind::Identifier { name: _ }, range: _ } }) |
                         Some(ExpressionFlatPart::Brace{ token: TokenKind::RoundL | TokenKind::SquareL | TokenKind::CurlyL, position: _ }) => {
                             expression_parts.push(ExpressionFlatPart::Operations{ 
@@ -190,6 +190,7 @@ impl<'a> Parser<'a> {
                         _ => unreachable!(),
                     };
                     
+                    // collapse () [] {} pairs in stack
                     if matches!(expression_parts.last(), Some(ExpressionFlatPart::Brace{ token: prev_brace, position: _ }) if *prev_brace == pair_brace) {
                         braces_stack.pop();
                         expression_parts.push(ExpressionFlatPart::Brace{ token: token.kind, position: token.range.start });
@@ -203,6 +204,7 @@ impl<'a> Parser<'a> {
 
                 _ => {}
             }
+            self.mov();
         }
 
         None
