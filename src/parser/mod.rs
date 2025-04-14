@@ -156,27 +156,51 @@ impl<'a> Parser<'a> {
         let mut braces_stack = Vec::<TokenKind>::new();
 
         while let Some(token) = self.next() {
+            // Prevent parsing after comma in top scope
+            // To not parse something like `struct_field1: a, struct_field2: b` as one expression
+            if token.kind == TokenKind::OpComma && braces_stack.is_empty() {
+                break;
+            }
+
             match token.kind {
                 TokenKind::Semicolon => break,
 
-                TokenKind::RoundL => braces_stack.push(token.kind),
-                TokenKind::SquareL => braces_stack.push(token.kind),
-                TokenKind::CurlyL => braces_stack.push(token.kind), 
-
-                TokenKind::RoundR => {
-                    match braces_stack.pop() {
-                        Some(TokenKind::RoundL) => {},
-                        Some(TokenKind::CurlyL) | Some(TokenKind::SquareL) => {
-                            expression_errors.push(Node {
-                                kind: NodeKind::ErrMismatchedBrace,
-                                range: token.range.clone(),
+                TokenKind::RoundL | TokenKind::SquareL | TokenKind::CurlyL => {
+                    match expression_parts.last() {
+                        // `identifier(` => `identifier call (`
+                        // `)(` => `) call (`
+                        Some(ExpressionFlatPart::Atom{ node: Node{ kind: NodeKind::Identifier { name: _ }, range: _ } }) |
+                        Some(ExpressionFlatPart::Brace{ token: TokenKind::RoundL | TokenKind::SquareL | TokenKind::CurlyL, position: _ }) => {
+                            expression_parts.push(ExpressionFlatPart::Operations{ 
+                                variants: OperationSettings::for_brace(token.kind),
+                                position: token.range.start,
                             });
                         },
-                        None => break,
-                        _ => todo!(),
+                        _ => {},
                     }
+                    expression_parts.push(ExpressionFlatPart::Brace{ token: token.kind, position: token.range.start });
+                    braces_stack.push(token.kind);
+                },
 
+                TokenKind::RoundR | TokenKind::SquareR | TokenKind::CurlyR => {
+                    let pair_brace = match token.kind {
+                        TokenKind::RoundR => TokenKind::RoundL,
+                        TokenKind::SquareR => TokenKind::SquareL,
+                        TokenKind::CurlyR => TokenKind::CurlyL,
+                        _ => unreachable!(),
+                    };
+                    
+                    if matches!(expression_parts.last(), Some(ExpressionFlatPart::Brace{ token: prev_brace, position: _ }) if *prev_brace == pair_brace) {
+                        braces_stack.pop();
+                        expression_parts.push(ExpressionFlatPart::Brace{ token: token.kind, position: token.range.start });
+                    } else {
+                        expression_errors.push(Node {
+                            kind: NodeKind::ErrMismatchedBrace,
+                            range: token.range.clone(),
+                        });
+                    }
                 }
+
                 _ => {}
             }
         }

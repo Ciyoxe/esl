@@ -227,7 +227,7 @@ impl OperationSettings {
             _ => &[],
         }
     }
-    pub fn for_call(next_brace_token_kind: TokenKind) -> &'static [Self] {
+    pub fn for_brace(next_brace_token_kind: TokenKind) -> &'static [Self] {
         match next_brace_token_kind {
             TokenKind::RoundL => &[Self {
                 kind: OperationKind::FuncCall,
