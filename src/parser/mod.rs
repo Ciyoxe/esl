@@ -3,7 +3,7 @@ pub mod operations;
 pub mod expressions;
 
 use crate::tokenizer::token::{Token, TokenKind};
-use expressions::ExpressionFlatPart;
+use expressions::{build_expression, ExpressionFlatPart};
 use node::{Node, NodeKind};
 use operations::OperationSettings;
 
@@ -163,15 +163,13 @@ impl<'a> Parser<'a> {
             }
 
             match token.kind {
-                TokenKind::Semicolon => break,
-
                 TokenKind::RoundL | TokenKind::SquareL | TokenKind::CurlyL => {
                     match expression_parts.last() {
                         // `x(a, b)` => `x call (a, b)`
                         // `(x)(a, b)` => `(x) call (a, b)`
                         Some(ExpressionFlatPart::Atom{ node: Node{ kind: NodeKind::Identifier { name: _ }, range: _ } }) |
                         Some(ExpressionFlatPart::Brace{ token: TokenKind::RoundL | TokenKind::SquareL | TokenKind::CurlyL, position: _ }) => {
-                            expression_parts.push(ExpressionFlatPart::Operations{ 
+                            expression_parts.push(ExpressionFlatPart::Operations{
                                 variants: OperationSettings::for_brace(token.kind),
                                 position: token.range.start,
                             });
@@ -180,6 +178,8 @@ impl<'a> Parser<'a> {
                     }
                     expression_parts.push(ExpressionFlatPart::Brace{ token: token.kind, position: token.range.start });
                     braces_stack.push(token.kind);
+
+                    self.mov();
                 },
 
                 TokenKind::RoundR | TokenKind::SquareR | TokenKind::CurlyR => {
@@ -189,7 +189,7 @@ impl<'a> Parser<'a> {
                         TokenKind::CurlyR => TokenKind::CurlyL,
                         _ => unreachable!(),
                     };
-                    
+
                     // collapse () [] {} pairs in stack
                     if matches!(expression_parts.last(), Some(ExpressionFlatPart::Brace{ token: prev_brace, position: _ }) if *prev_brace == pair_brace) {
                         braces_stack.pop();
@@ -200,12 +200,29 @@ impl<'a> Parser<'a> {
                             range: token.range.clone(),
                         });
                     }
+
+                    self.mov();
                 }
 
-                _ => {}
+                TokenKind::Semicolon => break,
+
+                anyother => {
+                    let ops = OperationSettings::for_exact_token(anyother);
+                    if ops.len() > 0 {
+                        expression_parts.push(ExpressionFlatPart::Operations { variants: ops, position: self.pos });
+                        self.mov();
+                    }
+                    else if let Some(atom) = self.p_expression_atom() {
+                        expression_parts.push(ExpressionFlatPart::Atom{ node: atom });
+                    }
+                    else {
+                        break;
+                    }
+                }
             }
-            self.mov();
         }
+
+        build_expression(expression_parts);
 
         None
     }

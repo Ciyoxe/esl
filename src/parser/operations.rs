@@ -71,7 +71,7 @@ impl OperationSettings {
                     kind: OperationKind::Sub,
                 },
                 Self {
-                    precedence: 1,
+                    precedence: 9,
                     arity: OperationArity::UnaryPrefix,
                     kind: OperationKind::Neg,
                 },

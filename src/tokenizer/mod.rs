@@ -117,7 +117,7 @@ impl<'a> Tokenizer<'a> {
         })
     }
     fn t_word(&mut self) -> Option<Token> {
-        if !self.next_unwrap().is_ascii_alphabetic() || self.next_unwrap() != b'_' {
+        if !self.next_unwrap().is_ascii_alphabetic() && self.next_unwrap() != b'_' {
             return None;
         }
 

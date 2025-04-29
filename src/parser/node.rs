@@ -1,9 +1,11 @@
+#[derive(Debug, Clone)]
 pub struct Node {
     /// Range for Node with Token indices
     pub range: std::ops::Range<usize>,
     pub kind: NodeKind,
 }
 
+#[derive(Debug, Clone)]
 pub enum NodeKind {
     /*************************************************
      *                  PRIMITIVES                   *
