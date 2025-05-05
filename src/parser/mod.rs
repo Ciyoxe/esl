@@ -1,11 +1,10 @@
+pub mod expressions;
 pub mod node;
 pub mod operations;
-pub mod expressions;
 
 use crate::tokenizer::token::{Token, TokenKind};
-use expressions::{build_expression, ExpressionFlatPart};
+use expressions::ExpressionParser;
 use node::{Node, NodeKind};
-use operations::OperationSettings;
 
 pub struct Parser<'a> {
     pub pos: usize,
@@ -151,78 +150,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn p_expression(&mut self) -> Option<Node> {
-        let mut expression_parts = Vec::<ExpressionFlatPart>::new();
-        let mut expression_errors = Vec::<Node>::new();
-        let mut braces_stack = Vec::<TokenKind>::new();
-
-        while let Some(token) = self.next() {
-            // Prevent parsing after comma in top scope
-            // To not parse something like `struct_field1: a, struct_field2: b` as one expression
-            if token.kind == TokenKind::OpComma && braces_stack.is_empty() {
-                break;
-            }
-
-            match token.kind {
-                TokenKind::RoundL | TokenKind::SquareL | TokenKind::CurlyL => {
-                    match expression_parts.last() {
-                        // `x(a, b)` => `x call (a, b)`
-                        // `(x)(a, b)` => `(x) call (a, b)`
-                        Some(ExpressionFlatPart::Atom{ node: Node{ kind: NodeKind::Identifier { name: _ }, range: _ } }) |
-                        Some(ExpressionFlatPart::Brace{ token: TokenKind::RoundL | TokenKind::SquareL | TokenKind::CurlyL, position: _ }) => {
-                            expression_parts.push(ExpressionFlatPart::Operations{
-                                variants: OperationSettings::for_brace(token.kind),
-                                position: token.range.start,
-                            });
-                        },
-                        _ => {},
-                    }
-                    expression_parts.push(ExpressionFlatPart::Brace{ token: token.kind, position: token.range.start });
-                    braces_stack.push(token.kind);
-
-                    self.mov();
-                },
-
-                TokenKind::RoundR | TokenKind::SquareR | TokenKind::CurlyR => {
-                    let pair_brace = match token.kind {
-                        TokenKind::RoundR => TokenKind::RoundL,
-                        TokenKind::SquareR => TokenKind::SquareL,
-                        TokenKind::CurlyR => TokenKind::CurlyL,
-                        _ => unreachable!(),
-                    };
-
-                    // collapse () [] {} pairs in stack
-                    if matches!(expression_parts.last(), Some(ExpressionFlatPart::Brace{ token: prev_brace, position: _ }) if *prev_brace == pair_brace) {
-                        braces_stack.pop();
-                        expression_parts.push(ExpressionFlatPart::Brace{ token: token.kind, position: token.range.start });
-                    } else {
-                        expression_errors.push(Node {
-                            kind: NodeKind::ErrMismatchedBrace,
-                            range: token.range.clone(),
-                        });
-                    }
-
-                    self.mov();
-                }
-
-                TokenKind::Semicolon => break,
-
-                anyother => {
-                    let ops = OperationSettings::for_exact_token(anyother);
-                    if ops.len() > 0 {
-                        expression_parts.push(ExpressionFlatPart::Operations { variants: ops, position: self.pos });
-                        self.mov();
-                    }
-                    else if let Some(atom) = self.p_expression_atom() {
-                        expression_parts.push(ExpressionFlatPart::Atom{ node: atom });
-                    }
-                    else {
-                        break;
-                    }
-                }
-            }
-        }
-
-        build_expression(expression_parts);
+        let mut parser = ExpressionParser::new();
 
         None
     }
