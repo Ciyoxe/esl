@@ -288,9 +288,13 @@ impl<'a> Tokenizer<'a> {
                     Some(TokenKind::OpDot)
                 }
             },
+            b':' => {
+                this.mov();
+                Some(TokenKind::OpTypedef)
+            },
             b'?' => {
                 this.mov();
-                Some(TokenKind::OpErr)
+                Some(TokenKind::OpCatch)
             }
             b',' => {
                 this.mov();
@@ -301,10 +305,6 @@ impl<'a> Tokenizer<'a> {
     }
     fn t_delim(&mut self) -> Option<Token> {
         self.make_token(|this| match this.next_unwrap() {
-            b':' => {
-                this.mov();
-                Some(TokenKind::Colon)
-            }
             b';' => {
                 this.mov();
                 Some(TokenKind::Semicolon)

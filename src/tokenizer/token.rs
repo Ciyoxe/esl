@@ -22,34 +22,35 @@ pub enum TokenKind {
     NumDecFloat, // 1234.5
 
     // Operators
-    OpAdd,    // +
-    OpSub,    // -
-    OpMul,    // *
-    OpDiv,    // /
-    OpMod,    // %
-    OpGt,     // >
-    OpGe,     // >=
-    OpLt,     // <
-    OpLe,     // <=
-    OpNe,     // !=
-    OpEq,     // ==
-    OpOr,     // |
-    OpAnd,    // &
-    OpNot,    // !
-    OpDot,    // .
-    OpComma,  // ,
-    OpRng,    // ..
-    OpErr,    // ?
-    OpLam,    // ->
-    OpAsg,    // =
-    OpAddAsg, // +=
-    OpSubAsg, // -=
-    OpMulAsg, // *=
-    OpDivAsg, // /=
-    OpModAsg, // %=
-    OpAndAsg, // &=
-    OpOrAsg,  // |=
-    OpAs,     // as
+    OpAdd,     // +
+    OpSub,     // -
+    OpMul,     // *
+    OpDiv,     // /
+    OpMod,     // %
+    OpGt,      // >
+    OpGe,      // >=
+    OpLt,      // <
+    OpLe,      // <=
+    OpNe,      // !=
+    OpEq,      // ==
+    OpOr,      // |
+    OpAnd,     // &
+    OpNot,     // !
+    OpDot,     // .
+    OpComma,   // ,
+    OpRng,     // ..
+    OpCatch,   // ?
+    OpLam,     // ->
+    OpAsg,     // =
+    OpAddAsg,  // +=
+    OpSubAsg,  // -=
+    OpMulAsg,  // *=
+    OpDivAsg,  // /=
+    OpModAsg,  // %=
+    OpAndAsg,  // &=
+    OpOrAsg,   // |=
+    OpAs,      // as
+    OpTypedef, // :
 
     // Keywords
     KwIf,
@@ -74,7 +75,6 @@ pub enum TokenKind {
     KwFalse,
 
     // Delimiters
-    Colon,     // :
     Semicolon, // ;
     RoundL,    // (
     RoundR,    // )

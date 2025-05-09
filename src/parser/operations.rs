@@ -168,7 +168,7 @@ impl OperationSettings {
                     precedence: 2,
                 },
             ],
-            TokenKind::OpErr => &[Self {
+            TokenKind::OpCatch => &[Self {
                 kind: OperationKind::Err,
                 arity: OperationArity::UnaryPostfix,
                 precedence: 10,
