@@ -41,19 +41,17 @@ pub enum OperationKind {
     TypeCtor,  // Type[ TypeArgs... ]
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Operation {
     pub kind: OperationKind,
     pub left_operand: Option<Box<Node>>,
     pub right_operand: Option<Box<Node>>,
 }
 
-#[derive(Debug, Clone)]
-pub struct OperationDefinition {
-    pub kind: OperationKind,
-    pub range: Range<usize>,
-    pub left_binding_power: u16,
-    pub right_binding_power: u16,
+impl std::fmt::Debug for Operation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Operation").field("kind", &self.kind).finish()
+    }
 }
 
 impl INode for Operation {
@@ -67,7 +65,7 @@ impl INode for Operation {
         NodeKind::Operation(self)
     }
 
-    fn visit_children(&self, mut iter: impl FnMut(&Node)) {
+    fn visit_children<'a>(&'a self, mut iter: impl FnMut(&'a Node)) {
         if let Some(left) = &self.left_operand {
             iter(left.as_ref());
         }
@@ -75,6 +73,15 @@ impl INode for Operation {
             iter(right.as_ref());
         }
     }
+}
+
+
+#[derive(Debug, Clone)]
+pub struct OperationDefinition {
+    pub kind: OperationKind,
+    pub range: Range<usize>,
+    pub left_binding_power: u16,
+    pub right_binding_power: u16,
 }
 
 impl OperationDefinition {
@@ -116,6 +123,7 @@ impl OperationDefinition {
             Some(TokenKind::OpSub) => Some(Self::parse(parser, OperationKind::Sub, 10, 11)),
             Some(TokenKind::OpMul) => Some(Self::parse(parser, OperationKind::Mul, 20, 21)),
             Some(TokenKind::OpDiv) => Some(Self::parse(parser, OperationKind::Div, 20, 21)),
+            Some(TokenKind::OpRng) => Some(Self::parse(parser, OperationKind::Rng, 100, 101)),
             Some(TokenKind::RoundL) => Some(Self::parse(parser, OperationKind::FuncCall, 50, 0)),
 
             _ => None,

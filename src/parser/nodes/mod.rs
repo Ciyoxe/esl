@@ -7,6 +7,9 @@ pub use expressions::*;
 pub mod operations;
 pub use operations::*;
 
+pub mod debugger;
+pub use debugger::*;
+
 use super::Parser;
 use std::ops::Range;
 
@@ -34,7 +37,7 @@ pub trait INode: Sized {
     fn parse(parser: &mut Parser) -> Option<Self>;    
     fn into_node(self) -> NodeKind;
     
-    fn visit_children(&self, _visit: impl FnMut(&Node)) {}
+    fn visit_children<'a>(&'a self, _visit: impl FnMut(&'a Node)) {}
     fn visit_errors(&self, _visit: impl FnMut(&'static str)) {}
 }
 
@@ -51,7 +54,7 @@ impl Node {
     }
 
     #[inline]
-    pub fn visit_children(&self, visit: impl FnMut(&Node)) {
+    pub fn visit_children<'a>(&'a self, visit: impl FnMut(&'a Node)) {
         match &self.kind {
             // primitives
             NodeKind::IntegerLiteral(v) => v.visit_children(visit),

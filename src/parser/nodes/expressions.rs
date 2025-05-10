@@ -8,10 +8,16 @@ pub enum ExpressionError {
     UnclosedParentheses,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Expression {
     pub root: Box<Node>,
     pub errors: Vec<ExpressionError>,
+}
+
+impl std::fmt::Debug for Expression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Expression").field("errors", &self.errors).finish()
+    }
 }
 
 
@@ -31,7 +37,7 @@ impl INode for Expression {
         NodeKind::Expression(self)
     }
 
-    fn visit_children(&self, mut iter: impl FnMut(&Node)) {
+    fn visit_children<'a>(&'a self, mut iter: impl FnMut(&'a Node)) {
         iter(self.root.as_ref());
     }
 
@@ -110,20 +116,7 @@ impl PrattExprParser {
 
     // postfix or infix operator
     fn parse_led(&mut self, parser: &mut Parser, left_node: &mut Option<Node>, min_binding_power: u16) -> bool {
-        if let Some(definition) = OperationDefinition::parse_postfix_operation(parser) {
-            if definition.left_binding_power >= min_binding_power {
-                // replace left node with new operation node
-                *left_node = Some(definition.into_operation_node(
-                    left_node.take().map(|node| Box::new(node)),
-                    None,
-                ));
-                return true;
-            } else {
-                // we already parsed operator, but we can't use it due to precedence
-                // maybe it's infix operator (for example, (a..b) instead of (a..)b)
-                parser.rollback();
-            }
-        }
+        let mut infix_parsing_failed = false;
         
         if let Some(definition) = OperationDefinition::parse_infix_operation(parser) {
             if definition.left_binding_power >= min_binding_power {
@@ -147,10 +140,44 @@ impl PrattExprParser {
                     _ => { },
                 };
 
+                if right_operand.is_none() {
+                    infix_parsing_failed = true;
+                }
+
                 // replace left node with new operation node
+                // even if right operand is None
+                // because we need to know if it's error in infix operator, missing right operand
+                // if this can be postfix operator - it will be replaced later
                 *left_node = Some(definition.into_operation_node(
                     left_node.take().map(|node| Box::new(node)),
                     right_operand.map(|node| Box::new(node)),
+                ));
+
+                if infix_parsing_failed {
+                    parser.rollback();
+                } else {
+                    return true;
+                }
+            } else {
+                // we already parsed operator, but we can't use it due to precedence
+                // maybe it's postfix operator (for example, a.. instead of a..b)
+                parser.rollback();
+            }
+        }
+        
+        if let Some(definition) = OperationDefinition::parse_postfix_operation(parser) {
+            if definition.left_binding_power >= min_binding_power {
+                // replace left node with new operation node
+                *left_node = Some(definition.into_operation_node(
+                    if infix_parsing_failed {
+                        match left_node.take().unwrap() {
+                            Node { kind: NodeKind::Operation(op), .. } => op.left_operand,
+                            _ => unreachable!()
+                        }
+                    } else {
+                        left_node.take().map(|node| Box::new(node))
+                    },
+                    None,
                 ));
                 return true;
             } else {
