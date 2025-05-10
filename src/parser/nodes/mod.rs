@@ -17,6 +17,7 @@ pub enum NodeKind {
     FloatingLiteral(FloatingLiteral),
     StringLiteral(StringLiteral),
     BooleanLiteral(BooleanLiteral),
+    VoidLiteral(VoidLiteral),
 
     // expressions
     Operation(Operation),
@@ -57,7 +58,7 @@ impl Node {
             NodeKind::FloatingLiteral(v) => v.visit_children(visit),
             NodeKind::StringLiteral(v) => v.visit_children(visit),
             NodeKind::BooleanLiteral(v) => v.visit_children(visit),
-            
+            NodeKind::VoidLiteral(v) => v.visit_children(visit),
             // expressions
             NodeKind::Operation(v) => v.visit_children(visit),
             NodeKind::Expression(v) => v.visit_children(visit),
