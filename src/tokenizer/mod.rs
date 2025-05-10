@@ -305,6 +305,10 @@ impl<'a> Tokenizer<'a> {
     }
     fn t_delim(&mut self) -> Option<Token> {
         self.make_token(|this| match this.next_unwrap() {
+            b'_' => {
+                this.mov();
+                Some(TokenKind::Ignore)
+            }
             b';' => {
                 this.mov();
                 Some(TokenKind::Semicolon)

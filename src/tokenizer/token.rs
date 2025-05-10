@@ -75,13 +75,14 @@ pub enum TokenKind {
     KwFalse,
 
     // Delimiters
+    Ignore,    // _
     Semicolon, // ;
     RoundL,    // (
     RoundR,    // )
     SquareL,   // [
     SquareR,   // ]
-    CurlyL,   // {
-    CurlyR,   // }
+    CurlyL,    // {
+    CurlyR,    // }
 
     // Other tokens
     Attribute,  // @attr

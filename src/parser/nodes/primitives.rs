@@ -126,9 +126,31 @@ impl INode for BooleanLiteral {
 }
 
 #[derive(Debug, Clone)]
-pub struct VoidLiteral {}
+pub struct Identifier {
+    pub value: String,
+}
 
-impl INode for VoidLiteral {
+impl INode for Identifier {
+    fn parse(parser: &mut Parser) -> Option<Self> {
+        match parser.next().map(|token| token.kind) {
+            Some(TokenKind::Identifier) => {
+                let range = parser.advance().range.clone();
+                let bytes = parser.get_src(range).to_vec();
+                Some(Self { value: String::from_utf8(bytes).unwrap() })
+            }
+            _ => None,
+        }
+    }
+
+    fn into_node(self) -> NodeKind {
+        NodeKind::Identifier(self)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Void {}
+
+impl INode for Void {
     fn parse(parser: &mut Parser) -> Option<Self> {
         // just ()
         if 
@@ -144,6 +166,23 @@ impl INode for VoidLiteral {
     }
 
     fn into_node(self) -> NodeKind {
-        NodeKind::VoidLiteral(self)
+        NodeKind::Void(self)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct DontCare {}
+
+impl INode for DontCare {
+    fn parse(parser: &mut Parser) -> Option<Self> {
+        if parser.advance_if(TokenKind::Ignore) {
+            Some(Self {})
+        } else {
+            None
+        }
+    }
+
+    fn into_node(self) -> NodeKind {
+        NodeKind::DontCare(self)
     }
 }

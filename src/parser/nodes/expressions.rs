@@ -69,7 +69,9 @@ impl PrattExprParser {
             .or_else(|| Node::parse::<FloatingLiteral>(parser))
             .or_else(|| Node::parse::<StringLiteral>(parser))
             .or_else(|| Node::parse::<BooleanLiteral>(parser))
-            .or_else(|| Node::parse::<VoidLiteral>(parser))
+            .or_else(|| Node::parse::<Identifier>(parser))
+            .or_else(|| Node::parse::<DontCare>(parser))
+            .or_else(|| Node::parse::<Void>(parser))
     }
     
     fn parse_atom(&mut self, parser: &mut Parser) -> Option<Node> {
