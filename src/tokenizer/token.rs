@@ -50,6 +50,7 @@ pub enum TokenKind {
     OpAndAsg,  // &=
     OpOrAsg,   // |=
     OpAs,      // as
+    OpRef,     // ref
     OpTypedef, // :
 
     // Keywords
@@ -70,7 +71,6 @@ pub enum TokenKind {
     KwUse,
     KwModule,
     KwPub,
-    KwVoid,
     KwTrue,
     KwFalse,
 

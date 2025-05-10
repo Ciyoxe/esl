@@ -133,9 +133,9 @@ impl<'a> Tokenizer<'a> {
                 b"fun" => Some(TokenKind::KwFun),
                 b"pub" => Some(TokenKind::KwPub),
                 b"use" => Some(TokenKind::KwUse),
+                b"ref" => Some(TokenKind::OpRef),
                 b"type" => Some(TokenKind::KwType),
                 b"enum" => Some(TokenKind::KwEnum),
-                b"void" => Some(TokenKind::KwVoid),
                 b"true" => Some(TokenKind::KwTrue),
                 b"loop" => Some(TokenKind::KwLoop),
                 b"while" => Some(TokenKind::KwWhile),
@@ -424,8 +424,8 @@ impl<'a> Tokenizer<'a> {
         if self.next().is_none() {
             return None;
         }
-        self.t_word()
-            .or_else(|| self.t_delim())
+        self.t_delim()
+            .or_else(|| self.t_word())
             .or_else(|| self.t_number())
             .or_else(|| self.t_doc()) // WARN: doc should go before op, to not match /// as three divisions
             .or_else(|| self.t_op())

@@ -22,7 +22,6 @@ pub enum NodeKind {
     BooleanLiteral(BooleanLiteral),
     Identifier(Identifier),
     DontCare(DontCare),
-    Void(Void),
 
     // expressions
     Operation(Operation),
@@ -36,9 +35,9 @@ pub struct Node {
 }
 
 pub trait INode: Sized {
-    fn parse(parser: &mut Parser) -> Option<Self>;    
+    fn parse(parser: &mut Parser) -> Option<Self>;
     fn into_node(self) -> NodeKind;
-    
+
     fn visit_children<'a>(&'a self, _visit: impl FnMut(&'a Node)) {}
     fn visit_errors(&self, _visit: impl FnMut(&'static str)) {}
 }
@@ -48,7 +47,7 @@ impl Node {
     pub fn parse<T: INode>(parser: &mut Parser) -> Option<Self> {
         let start_pos = parser.pos;
         let node_kind = T::parse(parser);
-        
+
         node_kind.map(|kind| Self {
             kind: kind.into_node(),
             range: start_pos..parser.pos,
@@ -65,7 +64,6 @@ impl Node {
             NodeKind::BooleanLiteral(v) => v.visit_children(visit),
             NodeKind::Identifier(v) => v.visit_children(visit),
             NodeKind::DontCare(v) => v.visit_children(visit),
-            NodeKind::Void(v) => v.visit_children(visit),
             // expressions
             NodeKind::Operation(v) => v.visit_children(visit),
             NodeKind::Expression(v) => v.visit_children(visit),

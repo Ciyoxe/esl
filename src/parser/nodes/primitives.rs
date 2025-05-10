@@ -25,7 +25,7 @@ impl INode for IntegerLiteral {
                 let range = parser.advance().range.clone();
                 let bytes = parser.get_src(range);
                 let value = u64::from_str_radix(std::str::from_utf8(bytes).unwrap(), 16);
-                
+
                 match value {
                     Ok(v)  => Some(Self { value: v, overflowed: false, }),
                     Err(_) => Some(Self { value: 0, overflowed: true, }),
@@ -35,7 +35,7 @@ impl INode for IntegerLiteral {
                 let range = parser.advance().range.clone();
                 let bytes = parser.get_src(range);
                 let value = str::parse::<u64>(std::str::from_utf8(bytes).unwrap());
-                
+
                 match value {
                     Ok(v)  => Some(Self { value: v, overflowed: false, }),
                     Err(_) => Some(Self { value: 0, overflowed: true, }),
@@ -93,7 +93,7 @@ impl INode for StringLiteral {
                 let range = parser.advance().range.clone();
                 let bytes = parser.get_src(range.start + 1..range.end - 1);
 
-                Some(Self { 
+                Some(Self {
                     value: String::from_utf8(bytes.to_vec()).unwrap()
                 })
             }
@@ -144,29 +144,6 @@ impl INode for Identifier {
 
     fn into_node(self) -> NodeKind {
         NodeKind::Identifier(self)
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Void {}
-
-impl INode for Void {
-    fn parse(parser: &mut Parser) -> Option<Self> {
-        // just ()
-        if 
-            matches!(parser.next().map(|token| token.kind), Some(TokenKind::RoundL)) &&
-            matches!(parser.lookahead(1).map(|token| token.kind), Some(TokenKind::RoundR)) 
-        {
-            parser.advance();
-            parser.advance();
-            Some(Self {})
-        } else {
-            None
-        }
-    }
-
-    fn into_node(self) -> NodeKind {
-        NodeKind::Void(self)
     }
 }
 

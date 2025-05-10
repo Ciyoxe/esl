@@ -69,17 +69,16 @@ impl PrattExprParser {
             .or_else(|| Node::parse::<FloatingLiteral>(parser))
             .or_else(|| Node::parse::<StringLiteral>(parser))
             .or_else(|| Node::parse::<BooleanLiteral>(parser))
-            .or_else(|| Node::parse::<Identifier>(parser))
             .or_else(|| Node::parse::<DontCare>(parser))
-            .or_else(|| Node::parse::<Void>(parser))
+            .or_else(|| Node::parse::<Identifier>(parser))
     }
-    
+
     fn parse_atom(&mut self, parser: &mut Parser) -> Option<Node> {
         // simple operand like 123
         if let Some(node) = Self::parse_operand(parser) {
             return Some(node);
         }
-    
+
         // if there is no operand - maybe it's opening brace
         if parser.advance_if(TokenKind::RoundL) {
             let inner_expr = self.parse_expression_part(parser, 0);
@@ -108,7 +107,7 @@ impl PrattExprParser {
         if let Some(definition) = OperationDefinition::parse_prefix_operation(parser) {
             let right_operand = self.parse_expression_part(parser, definition.right_binding_power);
             return Some(definition.into_operation_node(
-                None, 
+                None,
                 right_operand.map(|node| Box::new(node)),
             ))
         }
@@ -119,13 +118,14 @@ impl PrattExprParser {
     // postfix or infix operator
     fn parse_led(&mut self, parser: &mut Parser, left_node: &mut Option<Node>, min_binding_power: u16) -> bool {
         let mut infix_parsing_failed = false;
-        
+
         if let Some(definition) = OperationDefinition::parse_infix_operation(parser) {
             if definition.left_binding_power >= min_binding_power {
                 let right_operand = self.parse_expression_part(parser, definition.right_binding_power);
-                
+
                 // we should handle calls and constructors differently
                 // because they require closing braces
+                // also for calls argument list can be empty (right operand is none)
                 match definition.kind {
                     OperationKind::FuncCall  => if !parser.advance_if(TokenKind::RoundR) {
                         assert_eq!(definition.right_binding_power, 0);
@@ -139,12 +139,12 @@ impl PrattExprParser {
                         assert_eq!(definition.right_binding_power, 0);
                         self.errors.push(ExpressionError::UnclosedParentheses);
                     },
-                    _ => { },
+                    _ => {
+                        if right_operand.is_none() {
+                            infix_parsing_failed = true;
+                        }
+                    },
                 };
-
-                if right_operand.is_none() {
-                    infix_parsing_failed = true;
-                }
 
                 // replace left node with new operation node
                 // even if right operand is None
@@ -166,7 +166,7 @@ impl PrattExprParser {
                 parser.rollback();
             }
         }
-        
+
         if let Some(definition) = OperationDefinition::parse_postfix_operation(parser) {
             if definition.left_binding_power >= min_binding_power {
                 // replace left node with new operation node
