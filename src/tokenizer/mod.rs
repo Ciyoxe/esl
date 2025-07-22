@@ -2,10 +2,11 @@ pub mod token;
 
 use token::{Token, TokenKind};
 
+use crate::tokenizer::token::{ErrorToken, KeywordToken, OperationToken, ScopeToken};
+
 pub struct Tokenizer<'a> {
     pub pos: usize,
     pub src: &'a [u8],
-    pub tokens: Vec<Token>,
 }
 
 /*************************************************
@@ -13,27 +14,18 @@ pub struct Tokenizer<'a> {
  *************************************************/
 impl<'a> Tokenizer<'a> {
     pub fn new(src: &'a [u8]) -> Self {
-        Tokenizer {
-            src,
-            pos: 0,
-            tokens: Vec::new(),
-        }
+        Tokenizer { src, pos: 0 }
     }
-    pub fn tokenize(&mut self) {
+    pub fn tokenize(&mut self) -> Vec<Token> {
+        let mut tokens = Vec::new();
         loop {
             self.skip_ignored();
             match self.next_token() {
                 None => break,
-                Some(t) => self.tokens.push(t),
+                Some(t) => tokens.push(t),
             }
         }
-    }
-    pub fn print_tokens(&self) {
-        for token in self.tokens.iter() {
-            let content = &self.src[token.range.clone()];
-            let con_str = std::str::from_utf8(content).unwrap();
-            println!("{:#?} -> {}", token.kind, con_str);
-        }
+        tokens
     }
 }
 
@@ -49,9 +41,9 @@ impl<'a> Tokenizer<'a> {
             self.mov();
         }
     }
-    fn skip_and_get(&mut self, f: impl Fn(u8) -> bool) -> &[u8] {
+    fn capture_bytes(&mut self, f: impl FnOnce(&mut Self) -> ()) -> &[u8] {
         let start = self.pos;
-        self.skip(f);
+        f(self);
         &self.src[start..self.pos]
     }
 
@@ -89,63 +81,112 @@ impl<'a> Tokenizer<'a> {
         }
 
         self.make_token(|this| {
+            // 0b0101
             if this.next_unwrap() == b'0' && this.next_at(1).is_some_and(|b| b == b'b') {
-                this.mov();
-                this.mov();
-                this.skip(|b| b == b'0' || b == b'1');
+                let bytes = this.capture_bytes(|this| {
+                    this.mov();
+                    this.mov();
+                    this.skip(|b| b == b'0' || b == b'1');
+                });
 
-                Some(TokenKind::NumBinInt)
+                match std::str::from_utf8(bytes) {
+                    Ok(str) => match u64::from_str_radix(str, 2) {
+                        Ok(num) => Some(TokenKind::Integer(num)),
+                        Err(_) => Some(TokenKind::Error(ErrorToken::InvalidNumber)),
+                    },
+                    Err(_) => Some(TokenKind::Error(ErrorToken::InvalidByteSequence)),
+                }
+            // 0x123ABC
             } else if this.next_unwrap() == b'0' && this.next_at(1).is_some_and(|b| b == b'x') {
-                this.mov();
-                this.mov();
-                this.skip(|b| b.is_ascii_hexdigit());
-
-                Some(TokenKind::NumHexInt)
-            } else {
-                this.skip(|b| b.is_ascii_digit());
-
-                if this.next().is_some_and(|b| b == b'.') && this.next_at(1).is_some_and(|b| b.is_ascii_digit()) {
+                let bytes = this.capture_bytes(|this| {
                     this.mov();
                     this.mov();
+                    this.skip(|b| b.is_ascii_hexdigit());
+                });
+
+                match std::str::from_utf8(bytes) {
+                    Ok(str) => match u64::from_str_radix(str, 16) {
+                        Ok(num) => Some(TokenKind::Integer(num)),
+                        Err(_) => Some(TokenKind::Error(ErrorToken::InvalidNumber)),
+                    },
+                    Err(_) => Some(TokenKind::Error(ErrorToken::InvalidByteSequence)),
+                }
+            }
+            // 12345.678
+            else {
+                let mut is_floating_number = false;
+
+                let bytes = this.capture_bytes(|this| {
                     this.skip(|b| b.is_ascii_digit());
 
-                    Some(TokenKind::NumDecFloat)
-                } else {
-                    Some(TokenKind::NumDecInt)
+                    if this.next().is_some_and(|b| b == b'.')
+                        && this.next_at(1).is_some_and(|b| b.is_ascii_digit())
+                    {
+                        this.mov();
+                        this.mov();
+                        this.skip(|b| b.is_ascii_digit());
+
+                        is_floating_number = true;
+                    };
+                });
+
+                match std::str::from_utf8(bytes) {
+                    Ok(str) => {
+                        if is_floating_number {
+                            match str.parse::<f64>() {
+                                Ok(num) => Some(TokenKind::Floating(num)),
+                                Err(_) => Some(TokenKind::Error(ErrorToken::InvalidNumber)),
+                            }
+                        } else {
+                            match str.parse::<u64>() {
+                                Ok(num) => Some(TokenKind::Integer(num)),
+                                Err(_) => Some(TokenKind::Error(ErrorToken::InvalidNumber)),
+                            }
+                        }
+                    }
+                    Err(_) => Some(TokenKind::Error(ErrorToken::InvalidByteSequence)),
                 }
             }
         })
     }
+
     fn t_word(&mut self) -> Option<Token> {
         if !self.next_unwrap().is_ascii_alphabetic() && self.next_unwrap() != b'_' {
             return None;
         }
 
         self.make_token(|this| {
-            match this.skip_and_get(|b| b.is_ascii_alphanumeric() || b == b'_') {
-                b"as" => Some(TokenKind::OpAs),
-                b"if" => Some(TokenKind::KwIf),
-                b"or" => Some(TokenKind::KwOr),
-                b"in" => Some(TokenKind::KwIn),
-                b"for" => Some(TokenKind::KwFor),
-                b"let" => Some(TokenKind::KwLet),
-                b"var" => Some(TokenKind::KwVar),
-                b"fun" => Some(TokenKind::KwFun),
-                b"pub" => Some(TokenKind::KwPub),
-                b"use" => Some(TokenKind::KwUse),
-                b"ref" => Some(TokenKind::OpRef),
-                b"type" => Some(TokenKind::KwType),
-                b"enum" => Some(TokenKind::KwEnum),
-                b"true" => Some(TokenKind::KwTrue),
-                b"loop" => Some(TokenKind::KwLoop),
-                b"while" => Some(TokenKind::KwWhile),
-                b"trait" => Some(TokenKind::KwTrait),
-                b"match" => Some(TokenKind::KwMatch),
-                b"false" => Some(TokenKind::KwFalse),
-                b"module" => Some(TokenKind::KwModule),
-                b"struct" => Some(TokenKind::KwStruct),
+            match this.capture_bytes(|this| this.skip(|b| b.is_ascii_alphanumeric() || b == b'_')) {
+                b"_" => Some(TokenKind::Ignore),
 
-                _ => Some(TokenKind::Identifier),
+                b"as" => Some(TokenKind::Operation(OperationToken::As)),
+                b"ref" => Some(TokenKind::Operation(OperationToken::Ref)),
+
+                b"true" => Some(TokenKind::Boolean(true)),
+                b"false" => Some(TokenKind::Boolean(false)),
+
+                b"if" => Some(TokenKind::Keyword(KeywordToken::If)),
+                b"or" => Some(TokenKind::Keyword(KeywordToken::Or)),
+                b"in" => Some(TokenKind::Keyword(KeywordToken::In)),
+                b"for" => Some(TokenKind::Keyword(KeywordToken::For)),
+                b"let" => Some(TokenKind::Keyword(KeywordToken::Let)),
+                b"var" => Some(TokenKind::Keyword(KeywordToken::Var)),
+                b"fun" => Some(TokenKind::Keyword(KeywordToken::Fun)),
+                b"pub" => Some(TokenKind::Keyword(KeywordToken::Pub)),
+                b"use" => Some(TokenKind::Keyword(KeywordToken::Use)),
+                b"enum" => Some(TokenKind::Keyword(KeywordToken::Enum)),
+                b"type" => Some(TokenKind::Keyword(KeywordToken::Type)),
+                b"loop" => Some(TokenKind::Keyword(KeywordToken::Loop)),
+                b"trait" => Some(TokenKind::Keyword(KeywordToken::Trait)),
+                b"while" => Some(TokenKind::Keyword(KeywordToken::While)),
+                b"match" => Some(TokenKind::Keyword(KeywordToken::Match)),
+                b"struct" => Some(TokenKind::Keyword(KeywordToken::Struct)),
+                b"module" => Some(TokenKind::Keyword(KeywordToken::Module)),
+
+                bytes => match std::str::from_utf8(bytes) {
+                    Ok(str) => Some(TokenKind::Identifier(str.to_owned())),
+                    Err(_) => Some(TokenKind::Error(ErrorToken::InvalidByteSequence)),
+                },
             }
         })
     }
@@ -155,187 +196,197 @@ impl<'a> Tokenizer<'a> {
                 Some(b'=') => {
                     this.mov();
                     this.mov();
-                    Some(TokenKind::OpAddAsg)
+                    Some(TokenKind::Operation(OperationToken::AddAsg))
                 }
                 _ => {
                     this.mov();
-                    Some(TokenKind::OpAdd)
+                    Some(TokenKind::Operation(OperationToken::Add))
                 }
             },
             b'-' => match this.next_at(1) {
                 Some(b'>') => {
                     this.mov();
                     this.mov();
-                    Some(TokenKind::OpLam)
+                    Some(TokenKind::Operation(OperationToken::Lam))
                 }
                 Some(b'=') => {
                     this.mov();
                     this.mov();
-                    Some(TokenKind::OpSubAsg)
+                    Some(TokenKind::Operation(OperationToken::SubAsg))
                 }
                 _ => {
                     this.mov();
-                    Some(TokenKind::OpSub)
+                    Some(TokenKind::Operation(OperationToken::Sub))
                 }
             },
             b'*' => match this.next_at(1) {
                 Some(b'=') => {
                     this.mov();
                     this.mov();
-                    Some(TokenKind::OpMulAsg)
+                    Some(TokenKind::Operation(OperationToken::MulAsg))
                 }
                 _ => {
                     this.mov();
-                    Some(TokenKind::OpMul)
+                    Some(TokenKind::Operation(OperationToken::Mul))
                 }
             },
             b'/' => match this.next_at(1) {
                 Some(b'=') => {
                     this.mov();
                     this.mov();
-                    Some(TokenKind::OpDivAsg)
+                    Some(TokenKind::Operation(OperationToken::DivAsg))
                 }
                 _ => {
                     this.mov();
-                    Some(TokenKind::OpDiv)
+                    Some(TokenKind::Operation(OperationToken::Div))
                 }
             },
             b'%' => match this.next_at(1) {
                 Some(b'=') => {
                     this.mov();
                     this.mov();
-                    Some(TokenKind::OpModAsg)
+                    Some(TokenKind::Operation(OperationToken::ModAsg))
                 }
                 _ => {
                     this.mov();
-                    Some(TokenKind::OpMod)
+                    Some(TokenKind::Operation(OperationToken::Mod))
                 }
             },
             b'>' => match this.next_at(1) {
                 Some(b'=') => {
                     this.mov();
                     this.mov();
-                    Some(TokenKind::OpGe)
+                    Some(TokenKind::Operation(OperationToken::Ge))
                 }
                 _ => {
                     this.mov();
-                    Some(TokenKind::OpGt)
+                    Some(TokenKind::Operation(OperationToken::Gt))
                 }
             },
             b'<' => match this.next_at(1) {
                 Some(b'=') => {
                     this.mov();
                     this.mov();
-                    Some(TokenKind::OpLe)
+                    Some(TokenKind::Operation(OperationToken::Le))
                 }
                 _ => {
                     this.mov();
-                    Some(TokenKind::OpLt)
+                    Some(TokenKind::Operation(OperationToken::Lt))
                 }
             },
             b'!' => match this.next_at(1) {
                 Some(b'=') => {
                     this.mov();
                     this.mov();
-                    Some(TokenKind::OpNe)
+                    Some(TokenKind::Operation(OperationToken::Ne))
                 }
                 _ => {
                     this.mov();
-                    Some(TokenKind::OpNot)
+                    Some(TokenKind::Operation(OperationToken::Not))
                 }
             },
             b'=' => match this.next_at(1) {
                 Some(b'=') => {
                     this.mov();
                     this.mov();
-                    Some(TokenKind::OpEq)
+                    Some(TokenKind::Operation(OperationToken::Eq))
                 }
                 _ => {
                     this.mov();
-                    Some(TokenKind::OpAsg)
+                    Some(TokenKind::Operation(OperationToken::Asg))
                 }
             },
             b'|' => match this.next_at(1) {
                 Some(b'=') => {
                     this.mov();
                     this.mov();
-                    Some(TokenKind::OpOrAsg)
+                    Some(TokenKind::Operation(OperationToken::OrAsg))
                 }
                 _ => {
                     this.mov();
-                    Some(TokenKind::OpOr)
+                    Some(TokenKind::Operation(OperationToken::Or))
                 }
             },
             b'&' => match this.next_at(1) {
                 Some(b'=') => {
                     this.mov();
                     this.mov();
-                    Some(TokenKind::OpAndAsg)
+                    Some(TokenKind::Operation(OperationToken::AndAsg))
                 }
                 _ => {
                     this.mov();
-                    Some(TokenKind::OpAnd)
+                    Some(TokenKind::Operation(OperationToken::And))
                 }
             },
             b'.' => match this.next_at(1) {
                 Some(b'.') => {
                     this.mov();
                     this.mov();
-                    Some(TokenKind::OpRng)
+                    Some(TokenKind::Operation(OperationToken::Rng))
                 }
                 _ => {
                     this.mov();
-                    Some(TokenKind::OpDot)
+                    Some(TokenKind::Operation(OperationToken::Dot))
                 }
             },
             b':' => {
                 this.mov();
-                Some(TokenKind::OpTypedef)
-            },
+                Some(TokenKind::Operation(OperationToken::Typedef))
+            }
             b'?' => {
                 this.mov();
-                Some(TokenKind::OpCatch)
+                Some(TokenKind::Operation(OperationToken::Catch))
             }
             b',' => {
                 this.mov();
-                Some(TokenKind::OpComma)
+                Some(TokenKind::Operation(OperationToken::Comma))
             }
             _ => None,
         })
     }
-    fn t_delim(&mut self) -> Option<Token> {
+    fn t_scope(&mut self) -> Option<Token> {
         self.make_token(|this| match this.next_unwrap() {
-            b'_' => {
-                this.mov();
-                Some(TokenKind::Ignore)
-            }
-            b';' => {
-                this.mov();
-                Some(TokenKind::Semicolon)
-            }
             b'(' => {
                 this.mov();
-                Some(TokenKind::RoundL)
+                let children = this.tokenize();
+
+                if this.next().is_none_or(|b| b != b')') {
+                    Some(TokenKind::Error(ErrorToken::MissingClosingRound))
+                } else {
+                    Some(TokenKind::Scope(ScopeToken::RoundBraces(children)))
+                }
             }
             b'[' => {
                 this.mov();
-                Some(TokenKind::SquareL)
+                let children = this.tokenize();
+
+                if this.next().is_none_or(|b| b != b']') {
+                    Some(TokenKind::Error(ErrorToken::MissingClosingSquare))
+                } else {
+                    Some(TokenKind::Scope(ScopeToken::SquareBraces(children)))
+                }
             }
             b'{' => {
                 this.mov();
-                Some(TokenKind::CurlyL)
+                let children = this.tokenize();
+
+                if this.next().is_none_or(|b| b != b'}') {
+                    Some(TokenKind::Error(ErrorToken::MissingClosingCurly))
+                } else {
+                    Some(TokenKind::Scope(ScopeToken::CurlyBraces(children)))
+                }
             }
             b')' => {
                 this.mov();
-                Some(TokenKind::RoundR)
+                Some(TokenKind::Error(ErrorToken::RedundantClosingRound))
             }
             b']' => {
                 this.mov();
-                Some(TokenKind::SquareR)
+                Some(TokenKind::Error(ErrorToken::RedundantClosingSquare))
             }
             b'}' => {
                 this.mov();
-                Some(TokenKind::CurlyR)
+                Some(TokenKind::Error(ErrorToken::RedundantClosingCurly))
             }
             _ => None,
         })
@@ -370,7 +421,10 @@ impl<'a> Tokenizer<'a> {
 
         self.make_token(|this| {
             this.mov();
-            if this.next().is_none_or(|b| !b.is_ascii_alphabetic() && b != b'_') {
+            if this
+                .next()
+                .is_none_or(|b| !b.is_ascii_alphabetic() && b != b'_')
+            {
                 return Some(TokenKind::ErrAttributeName);
             }
 
@@ -380,7 +434,7 @@ impl<'a> Tokenizer<'a> {
         })
     }
     fn t_doc(&mut self) -> Option<Token> {
-        if     self.next_unwrap() == b'/'
+        if self.next_unwrap() == b'/'
             && self.next_at(1).is_some_and(|b| b == b'/')
             && self.next_at(2).is_some_and(|b| b == b'/')
         {
@@ -411,7 +465,10 @@ impl<'a> Tokenizer<'a> {
                 continue;
             }
             // Ensure that we don't skip a doc comment
-            if b == b'/' && self.next_at(1).is_some_and(|b| b == b'/') && self.next_at(2).is_none_or(|b| b != b'/') {
+            if b == b'/'
+                && self.next_at(1).is_some_and(|b| b == b'/')
+                && self.next_at(2).is_none_or(|b| b != b'/')
+            {
                 self.mov();
                 self.mov();
                 self.skip(|b| b != b'\n');
@@ -424,7 +481,7 @@ impl<'a> Tokenizer<'a> {
         if self.next().is_none() {
             return None;
         }
-        self.t_delim()
+        self.t_scope()
             .or_else(|| self.t_word())
             .or_else(|| self.t_number())
             .or_else(|| self.t_doc()) // WARN: doc should go before op, to not match /// as three divisions

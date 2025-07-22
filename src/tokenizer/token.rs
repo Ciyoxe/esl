@@ -14,84 +14,94 @@ impl Token {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+pub enum OperationToken {
+    Add,     // +
+    Sub,     // -
+    Mul,     // *
+    Div,     // /
+    Mod,     // %
+    Gt,      // >
+    Ge,      // >=
+    Lt,      // <
+    Le,      // <=
+    Ne,      // !=
+    Eq,      // ==
+    Or,      // |
+    And,     // &
+    Not,     // !
+    Dot,     // .
+    Comma,   // ,
+    Rng,     // ..
+    Catch,   // ?
+    Lam,     // ->
+    Asg,     // =
+    AddAsg,  // +=
+    SubAsg,  // -=
+    MulAsg,  // *=
+    DivAsg,  // /=
+    ModAsg,  // %=
+    AndAsg,  // &=
+    OrAsg,   // |=
+    As,      // as
+    Ref,     // ref
+    Typedef, // :
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum KeywordToken {
+    If,
+    Or,
+    Match,
+    For,
+    In,
+    While,
+    Loop,
+    Let,
+    Var,
+    Fun,
+    Type,
+    Struct,
+    Enum,
+    Trait,
+    Use,
+    Module,
+    Pub,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ErrorToken {
+    UnexpectedChar,         // useless chars
+    InvalidByteSequence,    // not a utf8 string
+
+    InvalidNumber,          // overflowed numbers
+
+    MissingClosingRound,    // missing ) `(a + b`
+    MissingClosingCurly,    // missing }
+    MissingClosingSquare,   // missing ]
+    RedundantClosingRound,  // redundant ) `a + b)`
+    RedundantClosingCurly,  // redundant }
+    RedundantClosingSquare, // redundant ]
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ScopeToken {
+    RoundBraces  (Vec<Token>),
+    CurlyBraces  (Vec<Token>),
+    SquareBraces (Vec<Token>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
-    // Numeric literals
-    NumBinInt,   // 0b0101
-    NumHexInt,   // 0xABC
-    NumDecInt,   // 1234
-    NumDecFloat, // 1234.5
-
-    // Operators
-    OpAdd,     // +
-    OpSub,     // -
-    OpMul,     // *
-    OpDiv,     // /
-    OpMod,     // %
-    OpGt,      // >
-    OpGe,      // >=
-    OpLt,      // <
-    OpLe,      // <=
-    OpNe,      // !=
-    OpEq,      // ==
-    OpOr,      // |
-    OpAnd,     // &
-    OpNot,     // !
-    OpDot,     // .
-    OpComma,   // ,
-    OpRng,     // ..
-    OpCatch,   // ?
-    OpLam,     // ->
-    OpAsg,     // =
-    OpAddAsg,  // +=
-    OpSubAsg,  // -=
-    OpMulAsg,  // *=
-    OpDivAsg,  // /=
-    OpModAsg,  // %=
-    OpAndAsg,  // &=
-    OpOrAsg,   // |=
-    OpAs,      // as
-    OpRef,     // ref
-    OpTypedef, // :
-
-    // Keywords
-    KwIf,
-    KwOr,
-    KwMatch,
-    KwFor,
-    KwIn,
-    KwWhile,
-    KwLoop,
-    KwLet,
-    KwVar,
-    KwFun,
-    KwType,
-    KwStruct,
-    KwEnum,
-    KwTrait,
-    KwUse,
-    KwModule,
-    KwPub,
-    KwTrue,
-    KwFalse,
-
-    // Delimiters
-    Ignore,    // _
-    Semicolon, // ;
-    RoundL,    // (
-    RoundR,    // )
-    SquareL,   // [
-    SquareR,   // ]
-    CurlyL,    // {
-    CurlyR,    // }
-
-    // Other tokens
-    Attribute,  // @attr
-    Identifier, // some_ident
-    String,     // "string"
-    DocComment, // /// comment
-
-    // Errors
-    ErrUnexpectedChar,     // unexpected character
-    ErrUnterminatedString, // unclosed string
-    ErrAttributeName,      // wrong attribute format
+    Integer    (u64),
+    Floating   (f64),
+    Boolean    (bool),
+    DocComment (String),
+    Identifier (String),
+    String     (String),
+    Operation  (OperationToken),
+    Keyword    (KeywordToken),
+    Scope      (ScopeToken),
+    Error      (ErrorToken),
+    Semicolon,
+    Ignore,
 }
