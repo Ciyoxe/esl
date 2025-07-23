@@ -41,11 +41,6 @@ impl<'a> Tokenizer<'a> {
             self.mov();
         }
     }
-    fn capture_bytes(&mut self, f: impl FnOnce(&mut Self) -> ()) -> &[u8] {
-        let start = self.pos;
-        f(self);
-        &self.src[start..self.pos]
-    }
 
     fn next(&self) -> Option<u8> {
         self.src.get(self.pos).copied()
@@ -57,6 +52,13 @@ impl<'a> Tokenizer<'a> {
         self.src[self.pos]
     }
 
+    #[inline(always)]
+    fn capture_bytes(&mut self, f: impl FnOnce(&mut Self) -> ()) -> &[u8] {
+        let start = self.pos;
+        f(self);
+        &self.src[start..self.pos]
+    }
+    #[inline(always)]
     fn make_token(&mut self, f: impl FnOnce(&mut Self) -> Option<TokenKind>) -> Option<Token> {
         let pos = self.pos;
         let tok = f(self);
@@ -81,71 +83,48 @@ impl<'a> Tokenizer<'a> {
         }
 
         self.make_token(|this| {
+            let mut radix = 0;
+
             // 0b0101
-            if this.next_unwrap() == b'0' && this.next_at(1).is_some_and(|b| b == b'b') {
-                let bytes = this.capture_bytes(|this| {
+            let bytes = this.capture_bytes(|this| {
+                if this.next_unwrap() == b'0' && this.next_at(1).is_some_and(|b| b == b'b') {
+                    radix = 2;
                     this.mov();
                     this.mov();
                     this.skip(|b| b == b'0' || b == b'1');
-                });
-
-                match std::str::from_utf8(bytes) {
-                    Ok(str) => match u64::from_str_radix(str, 2) {
-                        Ok(num) => Some(TokenKind::Integer(num)),
-                        Err(_) => Some(TokenKind::Error(ErrorToken::InvalidNumber)),
-                    },
-                    Err(_) => Some(TokenKind::Error(ErrorToken::InvalidByteSequence)),
-                }
-            // 0x123ABC
-            } else if this.next_unwrap() == b'0' && this.next_at(1).is_some_and(|b| b == b'x') {
-                let bytes = this.capture_bytes(|this| {
+                // 0x123ABC
+                } else if this.next_unwrap() == b'0' && this.next_at(1).is_some_and(|b| b == b'x') {
+                    radix = 16;
                     this.mov();
                     this.mov();
                     this.skip(|b| b.is_ascii_hexdigit());
-                });
-
-                match std::str::from_utf8(bytes) {
-                    Ok(str) => match u64::from_str_radix(str, 16) {
-                        Ok(num) => Some(TokenKind::Integer(num)),
-                        Err(_) => Some(TokenKind::Error(ErrorToken::InvalidNumber)),
-                    },
-                    Err(_) => Some(TokenKind::Error(ErrorToken::InvalidByteSequence)),
                 }
-            }
-            // 12345.678
-            else {
-                let mut is_floating_number = false;
-
-                let bytes = this.capture_bytes(|this| {
+                // 12345.678
+                else {
                     this.skip(|b| b.is_ascii_digit());
-
-                    if this.next().is_some_and(|b| b == b'.')
-                        && this.next_at(1).is_some_and(|b| b.is_ascii_digit())
+                    
+                    if this.next().is_some_and(|b| b == b'.') && 
+                       this.next_at(1).is_some_and(|b| b.is_ascii_digit())
                     {
                         this.mov();
                         this.mov();
                         this.skip(|b| b.is_ascii_digit());
-
-                        is_floating_number = true;
+                    } else {
+                        radix = 10;
                     };
-                });
-
-                match std::str::from_utf8(bytes) {
-                    Ok(str) => {
-                        if is_floating_number {
-                            match str.parse::<f64>() {
-                                Ok(num) => Some(TokenKind::Floating(num)),
-                                Err(_) => Some(TokenKind::Error(ErrorToken::InvalidNumber)),
-                            }
-                        } else {
-                            match str.parse::<u64>() {
-                                Ok(num) => Some(TokenKind::Integer(num)),
-                                Err(_) => Some(TokenKind::Error(ErrorToken::InvalidNumber)),
-                            }
-                        }
-                    }
-                    Err(_) => Some(TokenKind::Error(ErrorToken::InvalidByteSequence)),
                 }
+            });
+
+            match std::str::from_utf8(bytes) {
+                Ok(str) => match radix {
+                    0 => str.parse::<f64>()
+                        .map(|v| Some(TokenKind::Floating(v)))
+                        .unwrap_or(Some(TokenKind::Error(ErrorToken::InvalidNumber))),
+                    r => u64::from_str_radix(str, r)
+                        .map(|v| Some(TokenKind::Integer(v)))
+                        .unwrap_or(Some(TokenKind::Error(ErrorToken::InvalidNumber))),
+                },
+                Err(_) => Some(TokenKind::Error(ErrorToken::InvalidByteSequence)),
             }
         })
     }
@@ -190,6 +169,7 @@ impl<'a> Tokenizer<'a> {
             }
         })
     }
+
     fn t_op(&mut self) -> Option<Token> {
         self.make_token(|this| match this.next_unwrap() {
             b'+' => match this.next_at(1) {
@@ -350,100 +330,68 @@ impl<'a> Tokenizer<'a> {
                 this.mov();
                 let children = this.tokenize();
 
-                if this.next().is_none_or(|b| b != b')') {
-                    Some(TokenKind::Error(ErrorToken::MissingClosingRound))
-                } else {
+                if this.next().is_some_and(|b| b == b')') {
+                    this.mov();
                     Some(TokenKind::Scope(ScopeToken::RoundBraces(children)))
+                } else {
+                    Some(TokenKind::Error(ErrorToken::MissingClosingRound))
                 }
             }
             b'[' => {
                 this.mov();
                 let children = this.tokenize();
 
-                if this.next().is_none_or(|b| b != b']') {
-                    Some(TokenKind::Error(ErrorToken::MissingClosingSquare))
-                } else {
+                if this.next().is_some_and(|b| b == b']') {
+                    this.mov();
                     Some(TokenKind::Scope(ScopeToken::SquareBraces(children)))
+                } else {
+                    Some(TokenKind::Error(ErrorToken::MissingClosingSquare))
                 }
             }
             b'{' => {
                 this.mov();
                 let children = this.tokenize();
 
-                if this.next().is_none_or(|b| b != b'}') {
-                    Some(TokenKind::Error(ErrorToken::MissingClosingCurly))
-                } else {
+                if this.next().is_some_and(|b| b == b'}') {
+                    this.mov();
                     Some(TokenKind::Scope(ScopeToken::CurlyBraces(children)))
+                } else {
+                    Some(TokenKind::Error(ErrorToken::MissingClosingCurly))
                 }
             }
             b')' => {
                 this.mov();
-                Some(TokenKind::Error(ErrorToken::RedundantClosingRound))
+                None
             }
             b']' => {
                 this.mov();
-                Some(TokenKind::Error(ErrorToken::RedundantClosingSquare))
+                None
             }
             b'}' => {
                 this.mov();
-                Some(TokenKind::Error(ErrorToken::RedundantClosingCurly))
+                None
             }
             _ => None,
         })
     }
-    fn t_string(&mut self) -> Option<Token> {
-        if self.next_unwrap() != b'"' {
-            return None;
-        }
 
-        self.make_token(|this| {
-            let mut escaped = false;
-            this.mov();
-
-            while let Some(b) = this.next() {
-                if escaped {
-                    escaped = false;
-                } else if b == b'"' {
-                    this.mov();
-                    return Some(TokenKind::String);
-                } else if b == b'\\' {
-                    escaped = true;
-                }
-                this.mov();
-            }
-            Some(TokenKind::ErrUnterminatedString)
-        })
-    }
-    fn t_attribute(&mut self) -> Option<Token> {
-        if self.next_unwrap() != b'@' {
-            return None;
-        }
-
-        self.make_token(|this| {
-            this.mov();
-            if this
-                .next()
-                .is_none_or(|b| !b.is_ascii_alphabetic() && b != b'_')
-            {
-                return Some(TokenKind::ErrAttributeName);
-            }
-
-            this.mov();
-            this.skip(|b| b.is_ascii_alphanumeric() || b == b'_');
-            Some(TokenKind::Attribute)
-        })
-    }
     fn t_doc(&mut self) -> Option<Token> {
         if self.next_unwrap() == b'/'
             && self.next_at(1).is_some_and(|b| b == b'/')
             && self.next_at(2).is_some_and(|b| b == b'/')
         {
             self.make_token(|this| {
-                this.mov();
-                this.mov();
-                this.mov();
-                this.skip(|b| b != b'\n');
-                Some(TokenKind::DocComment)
+                let bytes = this.capture_bytes(|this| {
+                    this.mov();
+                    this.mov();
+                    this.mov();
+                    this.skip(|b| b != b'\n');
+                });
+
+                match std::str::from_utf8(bytes) {
+                    Ok(str) => Some(TokenKind::DocComment(str.to_owned())),
+                    Err(_) => Some(TokenKind::Error(ErrorToken::InvalidByteSequence)),
+                }
             })
         } else {
             None
@@ -455,9 +403,10 @@ impl<'a> Tokenizer<'a> {
             this.mov();
             this.skip(|b| !b.is_ascii_alphanumeric() && b != b'_' && b != b'@' && b != b';');
 
-            Some(TokenKind::ErrUnexpectedChar)
+            Some(TokenKind::Error(ErrorToken::UnexpectedChar))
         })
     }
+
     fn skip_ignored(&mut self) {
         while let Some(b) = self.next() {
             if b.is_ascii_whitespace() {
@@ -486,8 +435,6 @@ impl<'a> Tokenizer<'a> {
             .or_else(|| self.t_number())
             .or_else(|| self.t_doc()) // WARN: doc should go before op, to not match /// as three divisions
             .or_else(|| self.t_op())
-            .or_else(|| self.t_string())
-            .or_else(|| self.t_attribute())
             .or_else(|| self.skip_error())
     }
 }

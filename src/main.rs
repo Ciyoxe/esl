@@ -1,19 +1,25 @@
-use parser::{Debugger, Expression, Node};
+use pest::Parser;
+use pest_derive::Parser;
+use pest::iterators::Pair;
 
-pub mod tokenizer;
-pub mod parser;
+#[derive(Parser)]
+#[grammar = "../grammar.pest"]
+struct EslParser;
 
-fn debug_file(path: &str) {
-    let src = std::fs::read(path).unwrap();
-    let mut tokenizer = tokenizer::Tokenizer::new(&src);
-    tokenizer.tokenize();
+fn print_pair(pair: Pair<Rule>, indent: usize) {
+    let indent_str = "  ".repeat(indent);
+    println!("{}{:?}: {}", indent_str, pair.as_rule(), pair.as_str().trim());
 
-    let mut parser = parser::Parser::new(&src, &tokenizer.tokens);
-    let node = Node::parse::<Expression>(&mut parser).unwrap();
-
-    Debugger::print_nodes_tree(&node, &parser);
+    for inner in pair.into_inner() {
+        print_pair(inner, indent + 1);
+    }
 }
 
 fn main() {
-    debug_file("test.txt");
+    let src = std::fs::read_to_string("test.txt").unwrap();
+    let res = EslParser::parse(Rule::expr, &src).unwrap();
+
+    for pair in res {
+        print_pair(pair, 0);
+    }
 }

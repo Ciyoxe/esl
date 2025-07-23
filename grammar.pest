@@ -1,0 +1,63 @@
+// ──────────────────────────────────────────────
+//  Whitespace
+// ──────────────────────────────────────────────
+WHITESPACE = _{ " " | "\t" | NEWLINE }
+
+// ──────────────────────────────────────────────
+//  Lexical tokens
+// ──────────────────────────────────────────────
+identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+float      = @{ ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT+ }
+integer    = @{ ASCII_DIGIT+ }
+number     = _{ float | integer }
+
+// ──────────────────────────────────────────────
+//  Operators (silent tokens, visible nodes below)
+// ──────────────────────────────────────────────
+PLUS   = _{ "+" }
+MINUS  = _{ "-" }
+STAR   = _{ "*" }
+SLASH  = _{ "/" }
+NEG    = _{ "-" }
+NOT    = _{ "!" }
+CATCH  = _{ "?" }
+
+// ──────────────────────────────────────────────
+//  Expression grammar
+// ──────────────────────────────────────────────
+
+// grouping only
+atom = _{ number | identifier | "(" ~ expr ~ ")" }
+
+// prefix operators stay visible so you know which one you hit
+prefix = {
+      NEG ~ prefix   => { neg_expr }
+    | NOT ~ prefix   => { not_expr }
+    | atom
+}
+
+// postfix operators / calls – visible so you can identify them
+postfix = {
+      prefix ~ postfix_tail*
+}
+postfix_tail = _{
+      CATCH    => { catch_expr }
+    | "{" ~ expr_list? ~ "}" => { value_ctor }
+    | "[" ~ expr_list? ~ "]" => { type_ctor  }
+    | "(" ~ expr_list? ~ ")" => { func_call  }
+}
+
+// commas and surrounding parentheses are silent
+expr_list = _{ expr ~ ("," ~ expr)* ~ ","? }
+
+// binary precedence layers – silent internals, but keep the *whole* binary node visible
+expr = {
+      term ~ (PLUS  ~ expr)? => { add_expr }
+    | term ~ (MINUS ~ expr)? => { sub_expr }
+    | term
+}
+term = {
+      prefix ~ (STAR ~ term)? => { mul_expr }
+    | prefix ~ (SLASH ~ term)? => { div_expr }
+    | prefix
+}
