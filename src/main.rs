@@ -17,9 +17,16 @@ fn print_pair(pair: Pair<Rule>, indent: usize) {
 
 fn main() {
     let src = std::fs::read_to_string("test.txt").unwrap();
-    let res = EslParser::parse(Rule::expr, &src).unwrap();
+    let res = EslParser::parse(Rule::expr, &src);
 
-    for pair in res {
-        print_pair(pair, 0);
+    match res {
+        Ok(pairs) => {
+            for pair in pairs {
+                print_pair(pair, 0);
+            }
+        }
+        Err(err) => {
+            println!("{}", err.to_string());
+        }
     }
 }
