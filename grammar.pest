@@ -40,6 +40,8 @@ expr_prefix  = _{ ops_prefix* ~ atom }
 expr_postfix = _{ expr_prefix ~ ops_postfix* }
 expr_infix   = _{ expr_postfix ~ (ops_infix ~ expr_postfix)* }
 expr         = _{ expr_infix }
-expr_list    = _{ expr ~ ("," ~ expr)* ~ ","? }
+
+list_item    =  { expr }
+expr_list    = _{ list_item ~ ("," ~ list_item)* ~ ","? }
 
 file = _{ SOI ~ expr ~ EOI }
