@@ -2,6 +2,8 @@ use pest::Parser;
 use pest_derive::Parser;
 use pest::iterators::Pair;
 
+pub mod ast;
+
 #[derive(Parser)]
 #[grammar = "../grammar.pest"]
 struct EslParser;
@@ -17,7 +19,7 @@ fn print_pair(pair: Pair<Rule>, indent: usize) {
 
 fn main() {
     let src = std::fs::read_to_string("test.txt").unwrap();
-    let res = EslParser::parse(Rule::expr, &src);
+    let res = EslParser::parse(Rule::file, &src);
 
     match res {
         Ok(pairs) => {

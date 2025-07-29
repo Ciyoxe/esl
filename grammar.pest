@@ -9,35 +9,37 @@ WHITESPACE = _{ " " | "\t" | NEWLINE }
 identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 float      = @{ ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT+ }
 integer    = @{ ASCII_DIGIT+ }
-number     = _{ float | integer }
+boolean    = @{ "true" | "false" }
+
+primitive = _{ float | integer | boolean | identifier }
 
 // ──────────────────────────────────────────────
 // Operators
 // ──────────────────────────────────────────────
-op_add = { "+" }
-op_sub = { "-" }
-op_mul = { "*" }
-op_div = { "/" }
-op_neg = { "-" }
-op_not = { "!" }
-op_cat = { "?" }
+op_add     = { "+" }
+op_sub     = { "-" }
+op_mul     = { "*" }
+op_div     = { "/" }
+op_neg     = { "-" }
+op_not     = { "!" }
+op_cat     = { "?" }
+func_call  = { "(" ~ expr_list? ~ ")" }
+value_ctor = { "{" ~ expr_list? ~ "}" }
+type_ctor  = { "[" ~ expr_list? ~ "]" }
 
-ops_additive       = _{ op_add | op_sub }
-ops_multiplicative = _{ op_mul | op_div }
-ops_prefix         = _{ op_neg | op_not }
-ops_postfix        = _{ op_cat }
+ops_prefix  = _{ op_neg | op_not }
+ops_infix   = _{ op_add | op_sub | op_mul | op_div }
+ops_postfix = _{ op_cat | func_call | value_ctor | type_ctor }
 
 // ──────────────────────────────────────────────
 // Expression grammar
 // ──────────────────────────────────────────────
+atom = _{ primitive | "(" ~ expr ~ ")" }
 
-// grouping only
-atom = _{ number | identifier | "(" ~ expr ~ ")" }
+expr_prefix  = _{ ops_prefix* ~ atom }
+expr_postfix = _{ expr_prefix ~ ops_postfix* }
+expr_infix   = _{ expr_postfix ~ (ops_infix ~ expr_postfix)* }
+expr         = _{ expr_infix }
+expr_list    = _{ expr ~ ("," ~ expr)* ~ ","? }
 
-expr      =  { expr_additive }
-expr_list = _{ expr ~ ("," ~ expr)* ~ ","? }
-
-expr_additive       = { expr_multiplicative ~ (ops_additive ~ expr_additive)* }
-expr_multiplicative = { expr_unary ~ (ops_multiplicative ~ expr_multiplicative)* }
-expr_unary          = { ops_prefix* ~ expr_callable ~ ops_postfix* }
-expr_callable       = { atom ~ ("(" ~ expr_list? ~ ")")? }
+file = _{ SOI ~ expr ~ EOI }
