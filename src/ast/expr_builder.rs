@@ -18,7 +18,7 @@ impl OpInfo {
         Self { precedence, assoc }
     }
 
-    pub fn of(rule: &Rule) -> Option<Self> {
+    pub fn of(rule: Rule) -> Option<Self> {
         match rule {
             Rule::op_add => Some(Self::new(0, Assoc::Left)),
             Rule::op_sub => Some(Self::new(0, Assoc::Left)),

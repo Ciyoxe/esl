@@ -8,21 +8,21 @@ pub enum AstNode {
     Boolean     { value: bool },
     Identifier  { value: String },
 
+    // Reverse polish notation
     Expression  { operations: Vec<Operation> },
 }
 
 #[derive(Debug, Clone)]
 pub enum Operation {
-    Use (Box<AstNode>),
+    Value(Box<AstNode>),
 
     Neg,
     Not,
     Cat,
-
-    Add (Box<AstNode>),
-    Sub (Box<AstNode>),
-    Mul (Box<AstNode>),
-    Div (Box<AstNode>),
+    Add,
+    Sub,
+    Mul,
+    Div,
 
     FnCall   (Vec<AstNode>),
     ValCtor  (Vec<AstNode>),
