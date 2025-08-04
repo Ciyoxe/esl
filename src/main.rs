@@ -22,10 +22,9 @@ fn main() {
     let res = EslParser::parse(Rule::file, &src);
 
     match res {
-        Ok(pairs) => {
-            for pair in pairs {
-                print_pair(pair, 0);
-            }
+        Ok(mut pairs) => {
+            let ast = ast::build::build_expression(pairs.next().unwrap());
+            println!("{:#?}", ast);
         }
         Err(err) => {
             println!("{}", err.to_string());

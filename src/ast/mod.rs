@@ -14,7 +14,7 @@ pub enum AstNode {
 
 #[derive(Debug, Clone)]
 pub enum Operation {
-    Value(Box<AstNode>),
+    Value(AstNode),
 
     Neg,
     Not,

@@ -23,25 +23,26 @@ op_div     = { "/" }
 op_neg     = { "-" }
 op_not     = { "!" }
 op_cat     = { "?" }
-func_call  = { "(" ~ expr_list? ~ ")" }
-value_ctor = { "{" ~ expr_list? ~ "}" }
-type_ctor  = { "[" ~ expr_list? ~ "]" }
+func_call  = { "(" ~ expressions_comma_separated_list? ~ ")" }
+value_ctor = { "{" ~ expressions_comma_separated_list? ~ "}" }
+type_ctor  = { "[" ~ expressions_comma_separated_list? ~ "]" }
 
 ops_prefix  = _{ op_neg | op_not }
 ops_infix   = _{ op_add | op_sub | op_mul | op_div }
 ops_postfix = _{ op_cat | func_call | value_ctor | type_ctor }
 
 // ──────────────────────────────────────────────
-// Expression grammar
+// Expression grammar (see ast/expr_builder.rs)
 // ──────────────────────────────────────────────
-atom = _{ primitive | "(" ~ expr ~ ")" }
+opening_brace =  { "(" }
+closing_brace =  { ")" }
+atom          = _{ primitive | opening_brace ~ infix_expression ~ closing_brace }
 
-expr_prefix  = _{ ops_prefix* ~ atom }
-expr_postfix = _{ expr_prefix ~ ops_postfix* }
-expr_infix   = _{ expr_postfix ~ (ops_infix ~ expr_postfix)* }
-expr         = _{ expr_infix }
+prefix_expression  = _{ ops_prefix* ~ atom }
+postfix_expression = _{ prefix_expression ~ ops_postfix* }
+infix_expression   = _{ postfix_expression ~ (ops_infix ~ postfix_expression)* }
 
-list_item    =  { expr }
-expr_list    = _{ list_item ~ ("," ~ list_item)* ~ ","? }
+expression                       =  { infix_expression }
+expressions_comma_separated_list = _{ expression ~ ("," ~ expression)* ~ ","? }
 
-file = _{ SOI ~ expr ~ EOI }
+file = _{ SOI ~ expression ~ EOI }
