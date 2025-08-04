@@ -4,8 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-pest = "2.8.1"
-pest_derive = "2.8.1"
+winnow = "0.7.12"
 
 [profile.release]
 codegen-units = 1

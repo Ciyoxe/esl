@@ -1,8 +1,11 @@
-pub mod build;
-pub mod expr_builder;
+#[derive(Debug, Clone)]
+pub struct AstNode {
+    pub value: AstNodeContent,
+    pub range: std::ops::Range<usize>,
+}
 
 #[derive(Debug, Clone)]
-pub enum AstNode {
+pub enum AstNodeContent {
     Integer     { value: u64 },
     Float       { value: f64 },
     Boolean     { value: bool },
