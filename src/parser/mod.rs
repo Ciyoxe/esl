@@ -2,9 +2,8 @@ pub trait Ranged {
     fn set_range(&mut self, range: std::ops::Range<usize>);
 }
 
-pub struct ParserScope {
+struct ParserScope {
     pub begin_index: usize,
-    pub end_index: usize,
 }
 
 pub struct Parser<T> {
@@ -37,15 +36,16 @@ impl<T> Parser<T> {
     pub fn exit_scope(&mut self) {
         self.index = 0;
     }
+
+    pub fn get_range(&self) -> std::ops::Range<usize> {
+        self.scopes.last().unwrap().begin_index..self.index
+    }
+    pub fn take_range(&self) -> &[T] {
+        &self.tokens[self.get_range()]
+    }
 }
 
 pub fn repeat<T, O, E>(parser: &mut Parser<T>, mut f: impl FnMut(&mut Parser<T>) -> Result<O, E>) -> Result<Vec<O>, E> {
     let mut result = Vec::new();
-    parser.parse(|parser| {
-        let mut result = Vec::new();
-        f(parser)?;
-        f(parser)?;
-        Ok(result)
-    })?;
     Ok(result)
 }
