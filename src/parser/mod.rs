@@ -1,21 +1,25 @@
-pub trait Ranged {
-    fn set_range(&mut self, range: std::ops::Range<usize>);
-}
+pub mod combinators;
 
-struct ParserScope {
+struct ParserScope<ScopeT> {
     pub begin_index: usize,
+    pub data: ScopeT,
 }
 
-pub struct Parser<T> {
-    scopes: Vec<ParserScope>,
+pub struct Parser<T, ScopeT = ()> {
+    scopes: Vec<ParserScope<ScopeT>>,
     tokens: Vec<T>,
     index: usize,
 }
 
-impl<T> Parser<T> {
+impl<T, ScopeT> Parser<T, ScopeT> {
     pub fn new(tokens: Vec<T>) -> Self {
-        Self { tokens, index: 0, scopes: Vec::new() }
+        Self {
+            tokens,
+            index: 0,
+            scopes: Vec::new(),
+        }
     }
+
     pub fn end(&self) -> bool {
         self.index >= self.tokens.len()
     }
@@ -30,11 +34,38 @@ impl<T> Parser<T> {
         self.tokens.get(self.index + index)
     }
 
-    pub fn enter_scope(&mut self) {
-        self.index = 0;
+    pub fn test(&self, f: impl FnOnce(&T) -> bool) -> bool {
+        self.peek().map_or(false, |token| f(token))
+    }
+    pub fn test_and_take(&mut self, f: impl FnOnce(&T) -> bool) -> Option<&T> {
+        self.peek().filter(|token| f(token))
+    }
+    pub fn test_and_skip(&mut self, f: impl FnOnce(&T) -> bool) -> Option<&T> {
+        if self.peek().filter(|token| f(token)).is_some() {
+            // rust moment
+            return self.next();
+        }
+        None
+    }
+
+    pub fn skip_while(&mut self, mut f: impl FnMut(&T) -> bool) {
+        while let Some(token) = self.peek() {
+            if f(token) {
+                self.index += 1;
+            } else {
+                break;
+            }
+        }
+    }
+
+    pub fn enter_scope(&mut self, data: ScopeT) {
+        self.scopes.push(ParserScope {
+            data,
+            begin_index: self.index,
+        });
     }
     pub fn exit_scope(&mut self) {
-        self.index = 0;
+        self.scopes.pop();
     }
 
     pub fn get_range(&self) -> std::ops::Range<usize> {
@@ -43,9 +74,7 @@ impl<T> Parser<T> {
     pub fn take_range(&self) -> &[T] {
         &self.tokens[self.get_range()]
     }
-}
-
-pub fn repeat<T, O, E>(parser: &mut Parser<T>, mut f: impl FnMut(&mut Parser<T>) -> Result<O, E>) -> Result<Vec<O>, E> {
-    let mut result = Vec::new();
-    Ok(result)
+    pub fn get_scope(&self) -> &ScopeT {
+        &self.scopes.last().unwrap().data
+    }
 }
