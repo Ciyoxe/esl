@@ -1,5 +1,7 @@
+pub mod error;
 pub mod token;
 
+use error::TokenizeError;
 use token::{Token, TokenKind};
 
 pub struct Tokenizer<'a> {
@@ -104,7 +106,9 @@ impl<'a> Tokenizer<'a> {
             } else {
                 this.skip(|b| b.is_ascii_digit());
 
-                if this.next().is_some_and(|b| b == b'.') && this.next_at(1).is_some_and(|b| b.is_ascii_digit()) {
+                if this.next().is_some_and(|b| b == b'.')
+                    && this.next_at(1).is_some_and(|b| b.is_ascii_digit())
+                {
                     this.mov();
                     this.mov();
                     this.skip(|b| b.is_ascii_digit());
@@ -149,7 +153,7 @@ impl<'a> Tokenizer<'a> {
             }
         })
     }
-    fn t_op(&mut self) -> Option<Token> {
+    fn t_symbol(&mut self) -> Option<Token> {
         self.make_token(|this| match this.next_unwrap() {
             b'+' => match this.next_at(1) {
                 Some(b'=') => {
@@ -291,7 +295,7 @@ impl<'a> Tokenizer<'a> {
             b':' => {
                 this.mov();
                 Some(TokenKind::OpTypedef)
-            },
+            }
             b'?' => {
                 this.mov();
                 Some(TokenKind::OpCatch)
@@ -300,11 +304,6 @@ impl<'a> Tokenizer<'a> {
                 this.mov();
                 Some(TokenKind::OpComma)
             }
-            _ => None,
-        })
-    }
-    fn t_delim(&mut self) -> Option<Token> {
-        self.make_token(|this| match this.next_unwrap() {
             b'_' => {
                 this.mov();
                 Some(TokenKind::Ignore)
@@ -312,30 +311,6 @@ impl<'a> Tokenizer<'a> {
             b';' => {
                 this.mov();
                 Some(TokenKind::Semicolon)
-            }
-            b'(' => {
-                this.mov();
-                Some(TokenKind::RoundL)
-            }
-            b'[' => {
-                this.mov();
-                Some(TokenKind::SquareL)
-            }
-            b'{' => {
-                this.mov();
-                Some(TokenKind::CurlyL)
-            }
-            b')' => {
-                this.mov();
-                Some(TokenKind::RoundR)
-            }
-            b']' => {
-                this.mov();
-                Some(TokenKind::SquareR)
-            }
-            b'}' => {
-                this.mov();
-                Some(TokenKind::CurlyR)
             }
             _ => None,
         })
@@ -360,7 +335,7 @@ impl<'a> Tokenizer<'a> {
                 }
                 this.mov();
             }
-            Some(TokenKind::ErrUnterminatedString)
+            Some(TokenKind::Error(TokenizeError::UnterminatedString))
         })
     }
     fn t_attribute(&mut self) -> Option<Token> {
@@ -370,8 +345,11 @@ impl<'a> Tokenizer<'a> {
 
         self.make_token(|this| {
             this.mov();
-            if this.next().is_none_or(|b| !b.is_ascii_alphabetic() && b != b'_') {
-                return Some(TokenKind::ErrAttributeName);
+            if this
+                .next()
+                .is_none_or(|b| !b.is_ascii_alphabetic() && b != b'_')
+            {
+                return Some(TokenKind::Error(TokenizeError::InvalidAttributeName));
             }
 
             this.mov();
@@ -380,7 +358,7 @@ impl<'a> Tokenizer<'a> {
         })
     }
     fn t_doc(&mut self) -> Option<Token> {
-        if     self.next_unwrap() == b'/'
+        if self.next_unwrap() == b'/'
             && self.next_at(1).is_some_and(|b| b == b'/')
             && self.next_at(2).is_some_and(|b| b == b'/')
         {
@@ -395,13 +373,70 @@ impl<'a> Tokenizer<'a> {
             None
         }
     }
+    fn t_braces(&mut self) -> Option<Token> {
+        let closing = match self.next() {
+            Some(b'{') => b'}',
+            Some(b'(') => b')',
+            Some(b'[') => b']',
+            _ => return None,
+        };
+        self.make_token(|this| {
+            this.mov();
+
+            let mut children = Vec::new();
+            loop {
+                this.skip_ignored();
+                match this.next() {
+                    Some(b'}') | Some(b']') | Some(b')') => {
+                        if this.next_unwrap() == closing {
+                            this.mov();
+                        } else {
+                            this.tokens.push(Token {
+                                range: this.pos..this.pos + 1,
+                                kind: TokenKind::Error(TokenizeError::UnexpectedClosingDelimiter(
+                                    String::from_utf8_lossy(&[this.next_unwrap()]).to_string(),
+                                )),
+                            });
+                        }
+                        break;
+                    }
+                    _ => match this.next_token() {
+                        Some(t) => children.push(t),
+                        None => {
+                            this.tokens.push(Token {
+                                range: this.pos..this.pos,
+                                kind: TokenKind::Error(TokenizeError::UnclosedDelimiter),
+                            });
+                            break;
+                        }
+                    },
+                }
+            }
+
+            match closing {
+                b'}' => Some(TokenKind::CurlyBraces { children }),
+                b')' => Some(TokenKind::RoundBraces { children }),
+                b']' => Some(TokenKind::SquareBraces { children }),
+
+                _ => unreachable!(),
+            }
+        })
+    }
 
     fn skip_error(&mut self) -> Option<Token> {
         self.make_token(|this| {
             this.mov();
-            this.skip(|b| !b.is_ascii_alphanumeric() && b != b'_' && b != b'@' && b != b';');
+            let invalid = this.skip_and_get(|b| {
+                !b.is_ascii_alphanumeric()
+                    && !matches!(
+                        b,
+                        b'{' | b'[' | b'(' | b'@' | b'_' | b';' | b')' | b']' | b'}'
+                    )
+            });
 
-            Some(TokenKind::ErrUnexpectedChar)
+            Some(TokenKind::Error(TokenizeError::UnexpectedChar(
+                String::from_utf8_lossy(invalid).to_string(),
+            )))
         })
     }
     fn skip_ignored(&mut self) {
@@ -411,7 +446,10 @@ impl<'a> Tokenizer<'a> {
                 continue;
             }
             // Ensure that we don't skip a doc comment
-            if b == b'/' && self.next_at(1).is_some_and(|b| b == b'/') && self.next_at(2).is_none_or(|b| b != b'/') {
+            if b == b'/'
+                && self.next_at(1).is_some_and(|b| b == b'/')
+                && self.next_at(2).is_none_or(|b| b != b'/')
+            {
                 self.mov();
                 self.mov();
                 self.skip(|b| b != b'\n');
@@ -424,11 +462,11 @@ impl<'a> Tokenizer<'a> {
         if self.next().is_none() {
             return None;
         }
-        self.t_delim()
-            .or_else(|| self.t_word())
+        self.t_word()
             .or_else(|| self.t_number())
             .or_else(|| self.t_doc()) // WARN: doc should go before op, to not match /// as three divisions
-            .or_else(|| self.t_op())
+            .or_else(|| self.t_symbol())
+            .or_else(|| self.t_braces())
             .or_else(|| self.t_string())
             .or_else(|| self.t_attribute())
             .or_else(|| self.skip_error())

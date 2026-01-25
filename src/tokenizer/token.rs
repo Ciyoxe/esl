@@ -1,3 +1,5 @@
+use crate::tokenizer::error::TokenizeError;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Token {
     pub range: std::ops::Range<usize>,
@@ -13,7 +15,7 @@ impl Token {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
     // Numeric literals
     NumBinInt,   // 0b0101
@@ -27,6 +29,7 @@ pub enum TokenKind {
     OpMul,     // *
     OpDiv,     // /
     OpMod,     // %
+    OpRng,     // ..
     OpGt,      // >
     OpGe,      // >=
     OpLt,      // <
@@ -38,7 +41,6 @@ pub enum TokenKind {
     OpNot,     // !
     OpDot,     // .
     OpComma,   // ,
-    OpRng,     // ..
     OpCatch,   // ?
     OpLam,     // ->
     OpAsg,     // =
@@ -74,24 +76,19 @@ pub enum TokenKind {
     KwTrue,
     KwFalse,
 
-    // Delimiters
-    Ignore,    // _
-    Semicolon, // ;
-    RoundL,    // (
-    RoundR,    // )
-    SquareL,   // [
-    SquareR,   // ]
-    CurlyL,    // {
-    CurlyR,    // }
-
     // Other tokens
+    Ignore,     // _
+    Semicolon,  // ;
     Attribute,  // @attr
     Identifier, // some_ident
     String,     // "string"
     DocComment, // /// comment
 
+    // Structure
+    RoundBraces  { children: Vec<Token> },
+    SquareBraces { children: Vec<Token> },
+    CurlyBraces  { children: Vec<Token> },
+
     // Errors
-    ErrUnexpectedChar,     // unexpected character
-    ErrUnterminatedString, // unclosed string
-    ErrAttributeName,      // wrong attribute format
+    Error(TokenizeError),
 }
