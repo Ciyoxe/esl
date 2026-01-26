@@ -281,24 +281,17 @@ impl<'a> Tokenizer<'a> {
                     Some(TokenKind::OpAnd)
                 }
             },
-            b'.' => match this.next_at(1) {
-                Some(b'.') => {
-                    this.mov();
-                    this.mov();
-                    Some(TokenKind::OpRng)
-                }
-                _ => {
-                    this.mov();
-                    Some(TokenKind::OpDot)
-                }
-            },
+            b'.' => {
+                this.mov();
+                Some(TokenKind::OpDot)
+            }
             b':' => {
                 this.mov();
                 Some(TokenKind::OpTypedef)
             }
             b'?' => {
                 this.mov();
-                Some(TokenKind::OpCatch)
+                Some(TokenKind::OpTry)
             }
             b',' => {
                 this.mov();

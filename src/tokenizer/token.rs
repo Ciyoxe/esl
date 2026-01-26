@@ -29,7 +29,6 @@ pub enum TokenKind {
     OpMul,     // *
     OpDiv,     // /
     OpMod,     // %
-    OpRng,     // ..
     OpGt,      // >
     OpGe,      // >=
     OpLt,      // <
@@ -41,7 +40,7 @@ pub enum TokenKind {
     OpNot,     // !
     OpDot,     // .
     OpComma,   // ,
-    OpCatch,   // ?
+    OpTry,     // ?
     OpLam,     // ->
     OpAsg,     // =
     OpAddAsg,  // +=

@@ -23,10 +23,7 @@ pub enum OperationKind {
 
     Dot,     // a . b
     Comma,   // a , b
-    FromRng, // a ..
-    ToRng,   // .. a
-    Rng,     // a .. b
-    Catch,   // a ?
+    Try,     // a ?
     Lam,     // a -> b
     Ref,     // ref a
     As,      // a as b
@@ -117,8 +114,6 @@ impl OperationDefinition {
             Some(TokenKind::OpSub)     => Some(Self::parse(parser, OperationKind::Neg, 0, 200)),
             Some(TokenKind::OpNot)     => Some(Self::parse(parser, OperationKind::Not, 0, 200)),
             Some(TokenKind::OpRef)     => Some(Self::parse(parser, OperationKind::Ref, 0, 200)),
-            Some(TokenKind::OpRng)     => Some(Self::parse(parser, OperationKind::ToRng, 0, 200)),
-
             _ => None,
         }
     }
@@ -150,8 +145,6 @@ impl OperationDefinition {
 
             Some(TokenKind::OpOr)      => Some(Self::parse(parser, OperationKind::Or, 40, 41)),
 
-            Some(TokenKind::OpRng)     => Some(Self::parse(parser, OperationKind::Rng, 30, 31)),
-
             Some(TokenKind::OpTypedef) => Some(Self::parse(parser, OperationKind::Typedef, 21, 20)),
             Some(TokenKind::OpLam)     => Some(Self::parse(parser, OperationKind::Lam, 21, 20)),
             Some(TokenKind::OpAsg)     => Some(Self::parse(parser, OperationKind::Asg, 21, 20)),
@@ -171,8 +164,7 @@ impl OperationDefinition {
 
     pub fn parse_postfix_operation(parser: &mut Parser) -> Option<Self> {
         match parser.next().map(|token| token.kind) {
-            Some(TokenKind::OpRng)     => Some(Self::parse(parser, OperationKind::FromRng, 100, 0)),
-            Some(TokenKind::OpCatch)   => Some(Self::parse(parser, OperationKind::Catch, 100, 0)),
+            Some(TokenKind::OpTry)     => Some(Self::parse(parser, OperationKind::Try, 100, 0)),
 
             _ => None,
         }

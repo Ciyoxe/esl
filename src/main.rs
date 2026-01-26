@@ -1,4 +1,5 @@
 pub mod tokenizer;
+pub mod parser;
 
 use tokenizer::token::{Token, TokenKind};
 

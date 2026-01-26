@@ -162,7 +162,7 @@ impl PrattExprParser {
                 }
             } else {
                 // we already parsed operator, but we can't use it due to precedence
-                // maybe it's postfix operator (for example, a.. instead of a..b)
+                // maybe it's postfix operator
                 parser.rollback();
             }
         }
