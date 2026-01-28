@@ -1,6 +1,9 @@
 pub mod nodes;
-pub use nodes::*;
+pub mod primitives;
+pub mod expressions;
+pub mod debugger;
 
+use nodes::*;
 use crate::tokenizer::token::{Token, TokenKind};
 
 pub struct Parser<'a> {
@@ -26,7 +29,7 @@ impl<'a> Parser<'a> {
         self.tks.get(self.pos)
     }
 
-    pub fn lookahead(&self, n: usize) -> Option<&Token> {
+    pub fn next_at(&self, n: usize) -> Option<&Token> {
         self.tks.get(self.pos + n)
     }
 
@@ -35,7 +38,7 @@ impl<'a> Parser<'a> {
         &self.tks[self.pos - 1]
     }
 
-    pub fn advance_if(&mut self, kind: TokenKind) -> bool {
+    pub fn advance_on(&mut self, kind: TokenKind) -> bool {
         if let Some(token) = self.next() {
             if token.kind == kind {
                 self.advance();
@@ -47,5 +50,19 @@ impl<'a> Parser<'a> {
 
     pub fn rollback(&mut self) {
         self.pos -= 1;
+    }
+
+    #[inline]
+    pub fn make_node(&mut self, f: impl FnOnce(&mut Self) -> Option<NodeKind>) -> Option<Node> {
+        let pos = self.pos;
+        let tok = f(self);
+
+        if let Some(tok) = tok {
+            return Some(Node {
+                kind: tok,
+                range: pos..self.pos,
+            });
+        }
+        None
     }
 }
