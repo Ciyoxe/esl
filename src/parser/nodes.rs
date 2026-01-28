@@ -1,5 +1,8 @@
 use std::ops::Range;
-use crate::parser::primitives::*;
+use crate::parser::{
+    primitives::*,
+    expressions::*,
+};
 
 #[derive(Debug, Clone)]
 pub enum NodeKind {
@@ -10,6 +13,9 @@ pub enum NodeKind {
     BooleanLiteral(BooleanLiteral),
     Identifier(Identifier),
     DontCare(DontCare),
+
+    // Expressions
+    Operation(Operation),
 }
 
 #[derive(Debug, Clone)]

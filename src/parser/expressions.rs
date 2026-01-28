@@ -22,7 +22,6 @@ pub enum Operation {
     Not, // !a
 
     Dot,     // a . b
-    Comma,   // a , b
     Try,     // a ?
     Lam,     // a -> b
     Ref,     // ref a
@@ -43,7 +42,16 @@ pub enum Operation {
 }
 
 impl Operation {
-    pub fn from_token(token: &TokenKind) -> Option<Self> {
+    pub fn visit_children(&self, visit: impl FnMut(&Node)) {
+        match &self {
+            Operation::FuncCall { args } => args.iter().for_each(visit),
+            Operation::TypeCtor { args } => args.iter().for_each(visit),
+            Operation::ValueCtor { args } => args.iter().for_each(visit),
+            _ => (),
+        }
+    }
+
+    fn from_token(token: &TokenKind) -> Option<Self> {
         match token {
             TokenKind::OpAdd => Some(Self::Add),
             TokenKind::OpSub => Some(Self::Sub),
@@ -60,7 +68,6 @@ impl Operation {
             TokenKind::OpAnd => Some(Self::And),
             TokenKind::OpNot => Some(Self::Not),
             TokenKind::OpDot => Some(Self::Dot),
-            TokenKind::OpComma => Some(Self::Comma),
             TokenKind::OpTry => Some(Self::Try),
             TokenKind::OpLam => Some(Self::Lam),
             TokenKind::OpAsg => Some(Self::Asg),
@@ -79,5 +86,56 @@ impl Operation {
             _ => None,
         }
     }
-    
+    fn get_precedence(&self) -> u32 {
+        // TODO: not the final result, just for fun
+        match &self {
+            Operation::Dot
+            | Operation::Try
+            | Operation::FuncCall { .. }
+            | Operation::TypeCtor { .. }
+            | Operation::ValueCtor { .. } => 90,
+            Operation::Neg | Operation::Not | Operation::Ref => 80,
+            Operation::Mul | Operation::Div | Operation::Mod => 70,
+            Operation::Add | Operation::Sub => 60,
+            Operation::Gt | Operation::Ge | Operation::Lt | Operation::Le => 50,
+            Operation::Eq | Operation::Ne => 45,
+            Operation::And => 40,
+            Operation::Or => 30,
+            Operation::Typedef => 20,
+            Operation::Lam => 10,
+            Operation::Asg
+            | Operation::AddAsg
+            | Operation::SubAsg
+            | Operation::MulAsg
+            | Operation::DivAsg
+            | Operation::ModAsg
+            | Operation::AndAsg
+            | Operation::OrAsg => 0,
+        }
+    }
+}
+
+impl Parser<'_> {
+    pub fn p_operation(&mut self) -> Option<Node> {
+        self.make_node(|this| {
+            let operation = match this.next() {
+                Some(next) => match Operation::from_token(&next.kind) {
+                    Some(op) => op,
+                    None => return None,
+                }
+                None => return None,
+            };
+            Some(NodeKind::Operation(operation))
+        })
+    }
+}
+
+pub struct Expression {
+    rpn: Vec<Node>,
+}
+
+impl Expression {
+    pub fn visit_children(&self, visit: impl FnMut(&Node)) {
+        self.rpn.iter().for_each(visit);
+    }
 }
