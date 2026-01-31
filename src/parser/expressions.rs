@@ -193,7 +193,9 @@ impl Parser<'_> {
                 _ => break,
             }
             match inner_parser.next().map(|t| &t.kind) {
-                Some(TokenKind::OpComma) => (),
+                Some(TokenKind::OpComma) => {
+                    inner_parser.advance();
+                }
                 _ => break,
             }
         }
@@ -234,7 +236,12 @@ impl Parser<'_> {
     fn p_nested_expr(&mut self) -> Option<Node> {
         match self.next().map(|t| &t.kind) {
             Some(TokenKind::RoundBraces { children }) => {
-                Parser::new(self.src, children).p_expression()
+                if let Some(expr) = Parser::new(self.src, children).p_expression() {
+                    self.advance();
+                    Some(expr)
+                } else {
+                    None
+                }
             }
             _ => None,
         }
@@ -302,9 +309,7 @@ impl Parser<'_> {
                     }
                     required_atom = true;
                 }
-                None => {
-                    required_atom = false;
-                }
+                None => break
             }
         }
 

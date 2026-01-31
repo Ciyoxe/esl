@@ -1,5 +1,5 @@
-pub mod tokenizer;
 pub mod parser;
+pub mod tokenizer;
 
 use tokenizer::token::{Token, TokenKind};
 
@@ -7,7 +7,16 @@ fn debug_file(path: &str) {
     let src = std::fs::read(path).unwrap();
     let mut tokenizer = tokenizer::Tokenizer::new(&src);
     tokenizer.tokenize();
+
     print_token_tree(&tokenizer.tokens, &src, 0);
+
+    let mut parser = parser::Parser::new(&src, &tokenizer.tokens);
+    let expr = parser.p_expression();
+
+    match expr {
+        Some(e) => parser::debugger::Debugger::print_nodes_tree(&e, &parser),
+        _ => println!("No expression"),
+    };
 }
 
 fn main() {
