@@ -95,10 +95,40 @@ impl<'a> Parser<'a> {
     }
 
     #[inline]
-    pub fn make_error_here(&self, err: ParsingError) -> Node {
+    pub fn make_error_for_nodes(&self, err: ParsingError, nodes: &[Node]) -> Node {
+        let start = nodes.first().map_or(0, |n| n.range.start);
+        let end = nodes.last().map_or(0, |n| n.range.end).max(start);
         Node {
             kind: NodeKind::Error(err),
-            range: self.pos..self.pos,
+            range: start..end,
+        }
+    }
+
+    #[inline]
+    pub fn make_error_here(&self, err: ParsingError) -> Node {
+        let start = if self.pos > 0 {
+            self.tks[self.pos - 1].range.end
+        } else {
+            0
+        };
+        let end = self.tks.get(self.pos).map(|t| t.range.start).unwrap_or(self.src.len());
+        Node {
+            kind: NodeKind::Error(err),
+            range: start..end,
+        }
+    }
+
+    #[inline]
+    pub fn make_error_before_token_at(&self, err: ParsingError, token_idx: usize) -> Node {
+        let start = if token_idx > 0 {
+            self.tks[token_idx - 1].range.end
+        } else {
+            0
+        };
+        let end = self.tks.get(token_idx).map(|t| t.range.start).unwrap_or(self.src.len());
+        Node {
+            kind: NodeKind::Error(err),
+            range: start..end,
         }
     }
 }

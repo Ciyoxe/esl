@@ -1,14 +1,17 @@
 #[derive(Debug, Clone)]
 pub enum ParsingError {
+    // int bigger than 2^64
     IntegerOverflow,
     // (a + !)
     NoOperandAfterPrefixOperator,
     // (a + ?)
-    PostfixOperatorWithoutOperand,
+    NoOperandBeforePostfixOperation,
     // (+ b)
-    InfixOperationWithoutLeftOperand,
+    NoOperandBeforeInfixOperation,
     // (a +)
     NoOperandAfterInfixOperation,
     // f(a, b, c ####)
     UnexpectedCallArgument,
+    // (a + b ####)
+    UnexpectedToken,
 }

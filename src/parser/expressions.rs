@@ -121,6 +121,18 @@ impl Operation {
             | Operation::OrAsg => 0,
         }
     }
+    fn is_prefix(&self) -> bool {
+        matches!(self, Operation::Neg | Operation::Not | Operation::Ref)
+    }
+    fn is_postfix(&self) -> bool {
+        matches!(
+            self,
+            Operation::Try
+                | Operation::FuncCall { .. }
+                | Operation::ValueCtor { .. }
+                | Operation::TypeCtor { .. }
+        )
+    }
 }
 
 impl Parser<'_> {
@@ -234,17 +246,33 @@ impl Parser<'_> {
     }
     // (expr)
     fn p_nested_expr(&mut self) -> Option<Node> {
-        match self.next().map(|t| &t.kind) {
-            Some(TokenKind::RoundBraces { children }) => {
-                if let Some(expr) = Parser::new(self.src, children).p_expression() {
-                    self.advance();
-                    Some(expr)
-                } else {
-                    None
-                }
+        let Some(token) = self.next() else {
+            return None;
+        };
+        let TokenKind::RoundBraces { children } = &token.kind else {
+            return None;
+        };
+
+        let mut inner = Parser::new(self.src, children);
+        let mut expr = inner.p_expression().unwrap_or(Node {
+            kind: NodeKind::Expression(Expression { rpn: Vec::new() }),
+            range: token.range.clone(),
+        });
+
+        if inner.pos < children.len() {
+            if let NodeKind::Expression(ref mut e) = expr.kind {
+                e.rpn.push(
+                    self.make_error_for_tokens(
+                        ParsingError::UnexpectedToken,
+                        &children[inner.pos..],
+                    ),
+                );
             }
-            _ => None,
         }
+
+        self.advance();
+
+        Some(expr)
     }
     // prefix ops - operand - postfix ops
     fn p_atom(&mut self) -> Vec<Node> {
@@ -266,13 +294,18 @@ impl Parser<'_> {
             was_operand = true;
         }
 
+        let postfix_start_idx = self.pos;
+
         while let Some(postfix) = self.p_operation_postfix() {
             nodes.push(postfix);
             was_postfix = true;
         }
 
         if was_postfix && !was_operand {
-            nodes.push(self.make_error_here(ParsingError::PostfixOperatorWithoutOperand));
+            nodes.push(self.make_error_before_token_at(
+                ParsingError::NoOperandBeforePostfixOperation,
+                postfix_start_idx,
+            ));
         }
 
         nodes
@@ -282,16 +315,15 @@ impl Parser<'_> {
         let mut nodes = Vec::<Node>::new();
 
         let mut required_atom = false;
-        let mut was_atom: bool;
 
         loop {
+            let mut was_atom = false;
             let atom_nodes = self.p_atom();
+
             if atom_nodes.is_empty() {
                 if required_atom {
                     nodes.push(self.make_error_here(ParsingError::NoOperandAfterInfixOperation));
                     was_atom = true;
-                } else {
-                    break;
                 }
             } else {
                 nodes.extend(atom_nodes);
@@ -300,16 +332,16 @@ impl Parser<'_> {
 
             match self.p_operation_infix() {
                 Some(op) => {
-                    if was_atom {
-                        nodes.push(op);
-                    } else {
-                        nodes.push(
-                            self.make_error_here(ParsingError::InfixOperationWithoutLeftOperand),
-                        );
+                    if !was_atom {
+                        nodes.push(self.make_error_before_token_at(
+                            ParsingError::NoOperandBeforeInfixOperation,
+                            self.pos - 1,
+                        ));
                     }
+                    nodes.push(op);
                     required_atom = true;
                 }
-                None => break
+                None => break,
             }
         }
 
@@ -317,14 +349,46 @@ impl Parser<'_> {
     }
     pub fn p_expression(&mut self) -> Option<Node> {
         self.make_node(|this| {
-            let mut flat_form = this.p_flat_expr();
+            let flat_form = this.p_flat_expr();
 
             if flat_form.is_empty() {
                 return None;
             }
 
-            // TODO: make rpn building
-            Some(NodeKind::Expression(Expression { rpn: flat_form }))
+            let mut rpn = Vec::new();
+            let mut op_stack: Vec<Node> = Vec::new();
+            let mut prefix_stack = Vec::new();
+
+            for node in flat_form {
+                match &node.kind {
+                    NodeKind::Operation(op) => {
+                        if op.is_prefix() {
+                            prefix_stack.push(node);
+                        } else if op.is_postfix() {
+                            rpn.push(node);
+                        } else {
+                            while let Some(top) = op_stack.last() {
+                                if let NodeKind::Operation(top_op) = &top.kind {
+                                    if top_op.get_precedence() >= op.get_precedence() {
+                                        rpn.push(op_stack.pop().unwrap());
+                                        continue;
+                                    }
+                                }
+                                break;
+                            }
+                            op_stack.push(node);
+                        }
+                    }
+                    _ => {
+                        rpn.push(node);
+                        rpn.extend(prefix_stack.drain(..).rev());
+                    }
+                }
+            }
+
+            rpn.extend(op_stack.into_iter().rev());
+
+            Some(NodeKind::Expression(Expression { rpn }))
         })
     }
 }
