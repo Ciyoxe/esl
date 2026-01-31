@@ -9,17 +9,6 @@ pub struct IntegerLiteral {
     pub overflowed: bool,
 }
 
-impl IntegerLiteral {
-    pub fn has_errors(&self) -> bool {
-        self.overflowed
-    }
-    pub fn visit_errors(&self, mut visit: impl FnMut(&'static str)) {
-        if self.overflowed {
-            visit("Integer value too big, max is 2^64");
-        }
-    }
-}
-
 impl Parser<'_> {
     pub fn p_integer_literal(&mut self) -> Option<Node> {
         self.make_node(|this| {

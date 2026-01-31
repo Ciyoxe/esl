@@ -1,7 +1,8 @@
 use std::ops::Range;
 use crate::parser::{
-    primitives::*,
+    errors::*,
     expressions::*,
+    primitives::*,
 };
 
 #[derive(Debug, Clone)]
@@ -13,6 +14,7 @@ pub enum NodeKind {
     BooleanLiteral(BooleanLiteral),
     Identifier(Identifier),
     DontCare(DontCare),
+    Error(ParsingError),
 
     // Expressions
     Operation(Operation),
@@ -34,20 +36,6 @@ impl Node {
         match &self.kind {
             NodeKind::Operation(v) => v.visit_children(visit),
             NodeKind::Expression(v) => v.visit_children(visit),
-            _ => (),
-        }
-    }
-
-    pub fn has_errors(&self) -> bool {
-        match &self.kind {
-            NodeKind::IntegerLiteral(v) => v.has_errors(),
-            _ => false,
-        }
-    }
-
-    pub fn visit_errors(&self, visit: impl FnMut(&'static str)) {
-        match &self.kind {
-            NodeKind::IntegerLiteral(v) => v.visit_errors(visit),
             _ => (),
         }
     }

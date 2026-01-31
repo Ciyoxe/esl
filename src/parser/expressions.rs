@@ -55,13 +55,16 @@ impl Operation {
             TokenKind::OpNot => Some(Self::Not),
             TokenKind::OpRef => Some(Self::Ref),
             TokenKind::OpSub => Some(Self::Neg),
-            _ => None
+            _ => None,
         }
     }
     fn from_token_postfix(token: &TokenKind) -> Option<Self> {
         match token {
             TokenKind::OpTry => Some(Self::Try),
-            _ => None
+            TokenKind::RoundBraces { .. } => Some(Self::FuncCall { args: Vec::new() }),
+            TokenKind::CurlyBraces { .. } => Some(Self::ValueCtor { args: Vec::new() }),
+            TokenKind::SquareBraces { .. } => Some(Self::TypeCtor { args: Vec::new() }),
+            _ => None,
         }
     }
     fn from_token_infix(token: &TokenKind) -> Option<Self> {
@@ -118,13 +121,10 @@ impl Operation {
             | Operation::OrAsg => 0,
         }
     }
-    fn is_right_associative(&self) -> bool {
-        matches!(self, Operation::Neg | Operation::Not | Operation::Ref)
-    }
 }
 
 impl Parser<'_> {
-    pub fn p_operation_prefix(&mut self) -> Option<Node> {
+    fn p_operation_prefix(&mut self) -> Option<Node> {
         self.make_node(|this| {
             let operation = match this.next() {
                 Some(next) => match Operation::from_token_prefix(&next.kind) {
@@ -137,20 +137,39 @@ impl Parser<'_> {
             Some(NodeKind::Operation(operation))
         })
     }
-    pub fn p_operation_postfix(&mut self) -> Option<Node> {
+    fn p_operation_postfix(&mut self) -> Option<Node> {
         self.make_node(|this| {
-            let operation = match this.next() {
+            let mut operation = match this.next() {
                 Some(next) => match Operation::from_token_postfix(&next.kind) {
                     Some(op) => op,
                     None => return None,
                 },
                 None => return None,
             };
+            // Handle call-like operations
+            match &mut operation {
+                Operation::FuncCall { args }
+                | Operation::TypeCtor { args }
+                | Operation::ValueCtor { args } => {
+                    let next_nodes = match &this.next_unwrap().kind {
+                        TokenKind::CurlyBraces { children }
+                        | TokenKind::RoundBraces { children }
+                        | TokenKind::SquareBraces { children } => children,
+
+                        _ => {
+                            unreachable!("Call-like operation can be parsed only for braces tokens")
+                        }
+                    };
+                    args.extend(this.p_args_list(next_nodes));
+                }
+
+                _ => (),
+            }
             this.advance();
             Some(NodeKind::Operation(operation))
         })
     }
-    pub fn p_operation_infix(&mut self) -> Option<Node> {
+    fn p_operation_infix(&mut self) -> Option<Node> {
         self.make_node(|this| {
             let operation = match this.next() {
                 Some(next) => match Operation::from_token_infix(&next.kind) {
@@ -162,6 +181,31 @@ impl Parser<'_> {
             this.advance();
             Some(NodeKind::Operation(operation))
         })
+    }
+    // expr, expr, ..., expr, with optional trailing comma
+    fn p_args_list(&self, tokens: &[Token]) -> Vec<Node> {
+        let mut inner_parser = Parser::new(self.src, tokens);
+        let mut nodes = Vec::<Node>::new();
+
+        loop {
+            match inner_parser.p_expression() {
+                Some(expr) => nodes.push(expr),
+                _ => break,
+            }
+            match inner_parser.next().map(|t| &t.kind) {
+                Some(TokenKind::OpComma) => (),
+                _ => break,
+            }
+        }
+
+        if inner_parser.pos < tokens.len() {
+            nodes.push(self.make_error_for_tokens(
+                ParsingError::UnexpectedCallArgument,
+                &tokens[inner_parser.pos..],
+            ));
+        }
+
+        nodes
     }
 }
 
@@ -177,171 +221,105 @@ impl Expression {
 }
 
 impl Parser<'_> {
-    pub fn p_expressions_list(&mut self) -> Vec<Node> {
-        let mut expressions = Vec::new();
-
-        loop {
-            let Some(expression) = self.p_expression() else {
-                break;
-            };
-            expressions.push(expression);
-
-            if !self.advance_on(TokenKind::OpComma) {
-                break;
-            }
-            if self.next().is_none() {
-                break;
-            }
-        }
-
-        expressions
-    }
-
-    pub fn p_operand(&mut self) -> Option<Node> {
+    fn p_operand(&mut self) -> Option<Node> {
         self.p_identifier()
             .or_else(|| self.p_boolean_literal())
             .or_else(|| self.p_dont_care())
             .or_else(|| self.p_floating_literal())
             .or_else(|| self.p_integer_literal())
             .or_else(|| self.p_string_literal())
+            .or_else(|| self.p_nested_expr())
     }
-    fn p_grouped_expression(&mut self) -> Option<Node> {
-        let expression = {
-            let children = match self.next().map(|token| &token.kind) {
-                Some(TokenKind::CurlyBraces { children })
-                | Some(TokenKind::RoundBraces { children })
-                | Some(TokenKind::SquareBraces { children }) => children,
-                _ => return None,
-            };
-            let mut parser = Parser::new(self.src, children);
-            parser.p_expression()?
-        };
+    // (expr)
+    fn p_nested_expr(&mut self) -> Option<Node> {
+        match self.next().map(|t| &t.kind) {
+            Some(TokenKind::RoundBraces { children }) => {
+                Parser::new(self.src, children).p_expression()
+            }
+            _ => None,
+        }
+    }
+    // prefix ops - operand - postfix ops
+    fn p_atom(&mut self) -> Vec<Node> {
+        let mut nodes = Vec::<Node>::new();
+        let mut was_prefix = false;
+        let mut was_operand = false;
+        let mut was_postfix = false;
 
-        self.advance();
-        Some(expression)
-    }
-    fn p_call_operation(&mut self) -> Option<Node> {
-        enum CallKind {
-            Func,
-            Type,
-            Value,
+        while let Some(prefix) = self.p_operation_prefix() {
+            nodes.push(prefix);
+            was_prefix = true;
         }
 
-        self.make_node(|this| {
-            let (call_kind, args) = {
-                let (children, call_kind) = match this.next().map(|token| &token.kind) {
-                    Some(TokenKind::RoundBraces { children }) => (children, CallKind::Func),
-                    Some(TokenKind::SquareBraces { children }) => (children, CallKind::Type),
-                    Some(TokenKind::CurlyBraces { children }) => (children, CallKind::Value),
-                    _ => return None,
-                };
-                let mut parser = Parser::new(this.src, children);
-                let args = parser.p_expressions_list();
-                (call_kind, args)
-            };
+        if let Some(operand) = self.p_operand() {
+            nodes.push(operand);
+            was_operand = true;
+        } else if was_prefix {
+            nodes.push(self.make_error_here(ParsingError::NoOperandAfterPrefixOperator));
+            was_operand = true;
+        }
 
-            this.advance();
-            let operation = match call_kind {
-                CallKind::Func => Operation::FuncCall { args },
-                CallKind::Type => Operation::TypeCtor { args },
-                CallKind::Value => Operation::ValueCtor { args },
-            };
+        while let Some(postfix) = self.p_operation_postfix() {
+            nodes.push(postfix);
+            was_postfix = true;
+        }
 
-            Some(NodeKind::Operation(operation))
-        })
+        if was_postfix && !was_operand {
+            nodes.push(self.make_error_here(ParsingError::PostfixOperatorWithoutOperand));
+        }
+
+        nodes
     }
-    pub fn p_flat_expr_slice(&mut self) -> Vec<Node> {
-        let mut expr_parts = Vec::<Node>::new();
-        let mut expect_operand = true;
+    // atom - infix op - atom - infix op - ...
+    fn p_flat_expr(&mut self) -> Vec<Node> {
+        let mut nodes = Vec::<Node>::new();
+
+        let mut required_atom = false;
+        let mut was_atom: bool;
 
         loop {
-            if expect_operand {
-                if let Some(operand) = self.p_operand() {
-                    expr_parts.push(operand);
-                    expect_operand = false;
-                    continue;
+            let atom_nodes = self.p_atom();
+            if atom_nodes.is_empty() {
+                if required_atom {
+                    nodes.push(self.make_error_here(ParsingError::NoOperandAfterInfixOperation));
+                    was_atom = true;
+                } else {
+                    break;
                 }
-                if let Some(operation) = self.p_operation_prefix() {
-                    expr_parts.push(operation);
-                    continue;
-                }
-                if let Some(expression) = self.p_grouped_expression() {
-                    expr_parts.push(expression);
-                    expect_operand = false;
-                    continue;
-                }
-                break;
+            } else {
+                nodes.extend(atom_nodes);
+                was_atom = true;
             }
 
-            if let Some(operation) = self.p_call_operation() {
-                expr_parts.push(operation);
-                continue;
+            match self.p_operation_infix() {
+                Some(op) => {
+                    if was_atom {
+                        nodes.push(op);
+                    } else {
+                        nodes.push(
+                            self.make_error_here(ParsingError::InfixOperationWithoutLeftOperand),
+                        );
+                    }
+                    required_atom = true;
+                }
+                None => {
+                    required_atom = false;
+                }
             }
-            if let Some(operation) = self.p_operation_postfix() {
-                expr_parts.push(operation);
-                continue;
-            }
-            if let Some(operation) = self.p_operation_infix() {
-                expr_parts.push(operation);
-                expect_operand = true;
-                continue;
-            }
-            break;
         }
 
-        expr_parts
+        nodes
     }
     pub fn p_expression(&mut self) -> Option<Node> {
-        let start = self.pos;
         self.make_node(|this| {
-            let flat = this.p_flat_expr_slice();
-            let has_operand = flat
-                .iter()
-                .any(|node| !matches!(&node.kind, NodeKind::Operation(_)));
-            if !has_operand {
-                this.pos = start;
+            let mut flat_form = this.p_flat_expr();
+
+            if flat_form.is_empty() {
                 return None;
             }
 
-            let rpn = to_rpn(flat);
-            Some(NodeKind::Expression(Expression { rpn }))
+            // TODO: make rpn building
+            Some(NodeKind::Expression(Expression { rpn: flat_form }))
         })
     }
-}
-
-fn to_rpn(flat: Vec<Node>) -> Vec<Node> {
-    let mut output = Vec::<Node>::new();
-    let mut ops = Vec::<Node>::new();
-
-    for node in flat {
-        match &node.kind {
-            NodeKind::Operation(operation) => {
-                let precedence = operation.get_precedence();
-                let right_assoc = operation.is_right_associative();
-
-                while let Some(last) = ops.last() {
-                    let NodeKind::Operation(last_op) = &last.kind else {
-                        unreachable!();
-                    };
-                    let last_precedence = last_op.get_precedence();
-                    let should_pop = if right_assoc {
-                        last_precedence > precedence
-                    } else {
-                        last_precedence >= precedence
-                    };
-
-                    if should_pop {
-                        output.push(ops.pop().unwrap());
-                    } else {
-                        break;
-                    }
-                }
-                ops.push(node);
-            }
-            _ => output.push(node),
-        }
-    }
-
-    output.extend(ops.into_iter().rev());
-    output
 }

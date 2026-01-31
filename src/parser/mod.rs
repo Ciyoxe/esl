@@ -1,9 +1,11 @@
 pub mod debugger;
+pub mod errors;
 pub mod expressions;
 pub mod nodes;
 pub mod primitives;
 
 use crate::tokenizer::token::{Token, TokenKind};
+use errors::*;
 use nodes::*;
 
 pub struct Parser<'a> {
@@ -63,26 +65,40 @@ impl<'a> Parser<'a> {
     #[inline]
     pub fn make_node(&mut self, f: impl FnOnce(&mut Self) -> Option<NodeKind>) -> Option<Node> {
         let start_token = self.pos;
-        let node = f(self);
-        let end_token = self.pos.saturating_sub(1);
+        let node = f(self)?;
 
-        if node.is_some() && self.pos == start_token {
-            unreachable!("This may be a bug in the parser, node is returned, but no tokens consumed")
+        if self.pos <= start_token {
+            panic!("This may be a bug in the parser, node is returned, but no tokens consumed")
         }
 
-        if let Some(tok) = node {
-            let start = self.tks.get(start_token).map_or(0, |t| t.range.start);
-            let end = self
-                .tks
-                .get(end_token)
-                .map_or(self.src.len(), |t| t.range.end)
-                .max(start);
+        let start = self.tks.get(start_token).map_or(0, |t| t.range.start);
+        let end = self
+            .tks
+            .get(self.pos - 1)
+            .map_or(self.src.len(), |t| t.range.end)
+            .max(start);
 
-            return Some(Node {
-                kind: tok,
-                range: start..end,
-            });
+        Some(Node {
+            kind: node,
+            range: start..end,
+        })
+    }
+
+    #[inline]
+    pub fn make_error_for_tokens(&self, err: ParsingError, tokens: &[Token]) -> Node {
+        let start = tokens.first().map_or(0, |t| t.range.start);
+        let end = tokens.last().map_or(0, |t| t.range.end).max(start);
+        Node {
+            kind: NodeKind::Error(err),
+            range: start..end,
         }
-        None
+    }
+
+    #[inline]
+    pub fn make_error_here(&self, err: ParsingError) -> Node {
+        Node {
+            kind: NodeKind::Error(err),
+            range: self.pos..self.pos,
+        }
     }
 }
