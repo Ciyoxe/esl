@@ -197,19 +197,14 @@ impl Parser<'_> {
     // expr, expr, ..., expr, with optional trailing comma
     fn p_args_list(&self, tokens: &[Token]) -> Vec<Node> {
         let mut inner_parser = Parser::new(self.src, tokens);
-        let mut nodes = Vec::<Node>::new();
+        let mut nodes = Vec::with_capacity(8);
 
-        loop {
-            match inner_parser.p_expression() {
-                Some(expr) => nodes.push(expr),
-                _ => break,
+        while let Some(expr) = inner_parser.p_expression() {
+            nodes.push(expr);
+            if !matches!(inner_parser.next().map(|t| &t.kind), Some(TokenKind::OpComma)) {
+                break;
             }
-            match inner_parser.next().map(|t| &t.kind) {
-                Some(TokenKind::OpComma) => {
-                    inner_parser.advance();
-                }
-                _ => break,
-            }
+            inner_parser.advance();
         }
 
         if inner_parser.pos < tokens.len() {
@@ -275,8 +270,8 @@ impl Parser<'_> {
         Some(expr)
     }
     // prefix ops - operand - postfix ops
-    fn p_atom(&mut self) -> Vec<Node> {
-        let mut nodes = Vec::<Node>::new();
+    fn p_atom(&mut self, nodes: &mut Vec<Node>) -> usize {
+        let start_len = nodes.len();
         let mut was_prefix = false;
         let mut was_operand = false;
         let mut was_postfix = false;
@@ -308,25 +303,23 @@ impl Parser<'_> {
             ));
         }
 
-        nodes
+        nodes.len() - start_len
     }
     // atom - infix op - atom - infix op - ...
     fn p_flat_expr(&mut self) -> Vec<Node> {
-        let mut nodes = Vec::<Node>::new();
-
+        let mut nodes = Vec::with_capacity(16);
         let mut required_atom = false;
 
         loop {
             let mut was_atom = false;
-            let atom_nodes = self.p_atom();
+            let atom_nodes = self.p_atom(&mut nodes);
 
-            if atom_nodes.is_empty() {
+            if atom_nodes == 0 {
                 if required_atom {
                     nodes.push(self.make_error_here(ParsingError::NoOperandAfterInfixOperation));
                     was_atom = true;
                 }
             } else {
-                nodes.extend(atom_nodes);
                 was_atom = true;
             }
 
@@ -355,11 +348,11 @@ impl Parser<'_> {
                 return None;
             }
 
-            let mut rpn = Vec::new();
-            let mut op_stack: Vec<Node> = Vec::new();
-            let mut prefix_stack = Vec::new();
+            let mut rpn = Vec::with_capacity(flat_form.len());
+            let mut op_stack = Vec::<Node>::with_capacity(flat_form.len() / 2);
+            let mut prefix_stack = Vec::with_capacity(8);
 
-            for node in flat_form {
+            for node in flat_form.into_iter() {
                 match &node.kind {
                     NodeKind::Operation(op) => {
                         if op.is_prefix() {
