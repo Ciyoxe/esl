@@ -23,7 +23,6 @@ pub enum Operation {
 
     Dot,     // a . b
     Try,     // a ?
-    Lam,     // a -> b
     Ref,     // ref a
     Typedef, // a : b
 
@@ -42,7 +41,7 @@ pub enum Operation {
 }
 
 impl Operation {
-    pub fn visit_children(&self, visit: impl FnMut(&Node)) {
+    pub fn visit_children<'a>(&'a self, visit: impl FnMut(&'a Node)) {
         match &self {
             Operation::FuncCall { args } => args.iter().for_each(visit),
             Operation::TypeCtor { args } => args.iter().for_each(visit),
@@ -51,7 +50,21 @@ impl Operation {
         }
     }
 
-    fn from_token(token: &TokenKind) -> Option<Self> {
+    fn from_token_prefix(token: &TokenKind) -> Option<Self> {
+        match token {
+            TokenKind::OpNot => Some(Self::Not),
+            TokenKind::OpRef => Some(Self::Ref),
+            TokenKind::OpSub => Some(Self::Neg),
+            _ => None
+        }
+    }
+    fn from_token_postfix(token: &TokenKind) -> Option<Self> {
+        match token {
+            TokenKind::OpTry => Some(Self::Try),
+            _ => None
+        }
+    }
+    fn from_token_infix(token: &TokenKind) -> Option<Self> {
         match token {
             TokenKind::OpAdd => Some(Self::Add),
             TokenKind::OpSub => Some(Self::Sub),
@@ -66,10 +79,7 @@ impl Operation {
             TokenKind::OpEq => Some(Self::Eq),
             TokenKind::OpOr => Some(Self::Or),
             TokenKind::OpAnd => Some(Self::And),
-            TokenKind::OpNot => Some(Self::Not),
             TokenKind::OpDot => Some(Self::Dot),
-            TokenKind::OpTry => Some(Self::Try),
-            TokenKind::OpLam => Some(Self::Lam),
             TokenKind::OpAsg => Some(Self::Asg),
             TokenKind::OpAddAsg => Some(Self::AddAsg),
             TokenKind::OpSubAsg => Some(Self::SubAsg),
@@ -78,11 +88,7 @@ impl Operation {
             TokenKind::OpModAsg => Some(Self::ModAsg),
             TokenKind::OpAndAsg => Some(Self::AndAsg),
             TokenKind::OpOrAsg => Some(Self::OrAsg),
-            TokenKind::OpRef => Some(Self::Ref),
             TokenKind::OpTypedef => Some(Self::Typedef),
-            TokenKind::RoundBraces { children: _ } => Some(Self::FuncCall { args: Vec::new() }),
-            TokenKind::SquareBraces { children: _ } => Some(Self::TypeCtor { args: Vec::new() }),
-            TokenKind::CurlyBraces { children: _ } => Some(Self::ValueCtor { args: Vec::new() }),
             _ => None,
         }
     }
@@ -98,11 +104,10 @@ impl Operation {
             Operation::Mul | Operation::Div | Operation::Mod => 70,
             Operation::Add | Operation::Sub => 60,
             Operation::Gt | Operation::Ge | Operation::Lt | Operation::Le => 50,
-            Operation::Eq | Operation::Ne => 45,
-            Operation::And => 40,
-            Operation::Or => 30,
-            Operation::Typedef => 20,
-            Operation::Lam => 10,
+            Operation::Eq | Operation::Ne => 40,
+            Operation::And => 30,
+            Operation::Or => 20,
+            Operation::Typedef => 10,
             Operation::Asg
             | Operation::AddAsg
             | Operation::SubAsg
@@ -113,29 +118,230 @@ impl Operation {
             | Operation::OrAsg => 0,
         }
     }
+    fn is_right_associative(&self) -> bool {
+        matches!(self, Operation::Neg | Operation::Not | Operation::Ref)
+    }
 }
 
 impl Parser<'_> {
-    pub fn p_operation(&mut self) -> Option<Node> {
+    pub fn p_operation_prefix(&mut self) -> Option<Node> {
         self.make_node(|this| {
             let operation = match this.next() {
-                Some(next) => match Operation::from_token(&next.kind) {
+                Some(next) => match Operation::from_token_prefix(&next.kind) {
                     Some(op) => op,
                     None => return None,
-                }
+                },
                 None => return None,
             };
+            this.advance();
+            Some(NodeKind::Operation(operation))
+        })
+    }
+    pub fn p_operation_postfix(&mut self) -> Option<Node> {
+        self.make_node(|this| {
+            let operation = match this.next() {
+                Some(next) => match Operation::from_token_postfix(&next.kind) {
+                    Some(op) => op,
+                    None => return None,
+                },
+                None => return None,
+            };
+            this.advance();
+            Some(NodeKind::Operation(operation))
+        })
+    }
+    pub fn p_operation_infix(&mut self) -> Option<Node> {
+        self.make_node(|this| {
+            let operation = match this.next() {
+                Some(next) => match Operation::from_token_infix(&next.kind) {
+                    Some(op) => op,
+                    None => return None,
+                },
+                None => return None,
+            };
+            this.advance();
             Some(NodeKind::Operation(operation))
         })
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Expression {
     rpn: Vec<Node>,
 }
 
 impl Expression {
-    pub fn visit_children(&self, visit: impl FnMut(&Node)) {
+    pub fn visit_children<'a>(&'a self, visit: impl FnMut(&'a Node)) {
         self.rpn.iter().for_each(visit);
     }
+}
+
+impl Parser<'_> {
+    pub fn p_expressions_list(&mut self) -> Vec<Node> {
+        let mut expressions = Vec::new();
+
+        loop {
+            let Some(expression) = self.p_expression() else {
+                break;
+            };
+            expressions.push(expression);
+
+            if !self.advance_on(TokenKind::OpComma) {
+                break;
+            }
+            if self.next().is_none() {
+                break;
+            }
+        }
+
+        expressions
+    }
+
+    pub fn p_operand(&mut self) -> Option<Node> {
+        self.p_identifier()
+            .or_else(|| self.p_boolean_literal())
+            .or_else(|| self.p_dont_care())
+            .or_else(|| self.p_floating_literal())
+            .or_else(|| self.p_integer_literal())
+            .or_else(|| self.p_string_literal())
+    }
+    fn p_grouped_expression(&mut self) -> Option<Node> {
+        let expression = {
+            let children = match self.next().map(|token| &token.kind) {
+                Some(TokenKind::CurlyBraces { children })
+                | Some(TokenKind::RoundBraces { children })
+                | Some(TokenKind::SquareBraces { children }) => children,
+                _ => return None,
+            };
+            let mut parser = Parser::new(self.src, children);
+            parser.p_expression()?
+        };
+
+        self.advance();
+        Some(expression)
+    }
+    fn p_call_operation(&mut self) -> Option<Node> {
+        enum CallKind {
+            Func,
+            Type,
+            Value,
+        }
+
+        self.make_node(|this| {
+            let (call_kind, args) = {
+                let (children, call_kind) = match this.next().map(|token| &token.kind) {
+                    Some(TokenKind::RoundBraces { children }) => (children, CallKind::Func),
+                    Some(TokenKind::SquareBraces { children }) => (children, CallKind::Type),
+                    Some(TokenKind::CurlyBraces { children }) => (children, CallKind::Value),
+                    _ => return None,
+                };
+                let mut parser = Parser::new(this.src, children);
+                let args = parser.p_expressions_list();
+                (call_kind, args)
+            };
+
+            this.advance();
+            let operation = match call_kind {
+                CallKind::Func => Operation::FuncCall { args },
+                CallKind::Type => Operation::TypeCtor { args },
+                CallKind::Value => Operation::ValueCtor { args },
+            };
+
+            Some(NodeKind::Operation(operation))
+        })
+    }
+    pub fn p_flat_expr_slice(&mut self) -> Vec<Node> {
+        let mut expr_parts = Vec::<Node>::new();
+        let mut expect_operand = true;
+
+        loop {
+            if expect_operand {
+                if let Some(operand) = self.p_operand() {
+                    expr_parts.push(operand);
+                    expect_operand = false;
+                    continue;
+                }
+                if let Some(operation) = self.p_operation_prefix() {
+                    expr_parts.push(operation);
+                    continue;
+                }
+                if let Some(expression) = self.p_grouped_expression() {
+                    expr_parts.push(expression);
+                    expect_operand = false;
+                    continue;
+                }
+                break;
+            }
+
+            if let Some(operation) = self.p_call_operation() {
+                expr_parts.push(operation);
+                continue;
+            }
+            if let Some(operation) = self.p_operation_postfix() {
+                expr_parts.push(operation);
+                continue;
+            }
+            if let Some(operation) = self.p_operation_infix() {
+                expr_parts.push(operation);
+                expect_operand = true;
+                continue;
+            }
+            break;
+        }
+
+        expr_parts
+    }
+    pub fn p_expression(&mut self) -> Option<Node> {
+        let start = self.pos;
+        self.make_node(|this| {
+            let flat = this.p_flat_expr_slice();
+            let has_operand = flat
+                .iter()
+                .any(|node| !matches!(&node.kind, NodeKind::Operation(_)));
+            if !has_operand {
+                this.pos = start;
+                return None;
+            }
+
+            let rpn = to_rpn(flat);
+            Some(NodeKind::Expression(Expression { rpn }))
+        })
+    }
+}
+
+fn to_rpn(flat: Vec<Node>) -> Vec<Node> {
+    let mut output = Vec::<Node>::new();
+    let mut ops = Vec::<Node>::new();
+
+    for node in flat {
+        match &node.kind {
+            NodeKind::Operation(operation) => {
+                let precedence = operation.get_precedence();
+                let right_assoc = operation.is_right_associative();
+
+                while let Some(last) = ops.last() {
+                    let NodeKind::Operation(last_op) = &last.kind else {
+                        unreachable!();
+                    };
+                    let last_precedence = last_op.get_precedence();
+                    let should_pop = if right_assoc {
+                        last_precedence > precedence
+                    } else {
+                        last_precedence >= precedence
+                    };
+
+                    if should_pop {
+                        output.push(ops.pop().unwrap());
+                    } else {
+                        break;
+                    }
+                }
+                ops.push(node);
+            }
+            _ => output.push(node),
+        }
+    }
+
+    output.extend(ops.into_iter().rev());
+    output
 }

@@ -140,6 +140,7 @@ impl Parser<'_> {
                 Some(TokenKind::KwFalse) => BooleanLiteral { value: false },
                 _ => return None,
             };
+            this.advance();
             Some(NodeKind::BooleanLiteral(literal))
         })
     }
@@ -176,7 +177,10 @@ impl Parser<'_> {
     pub fn p_dont_care(&mut self) -> Option<Node> {
         self.make_node(|this| {
             match this.next().map(|token| &token.kind) {
-                Some(TokenKind::Ignore) => Some(NodeKind::DontCare(DontCare {})),
+                Some(TokenKind::Ignore) => {
+                    this.advance();
+                    Some(NodeKind::DontCare(DontCare {}))
+                },
                 _ => None,
             }
         })

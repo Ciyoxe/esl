@@ -1,10 +1,10 @@
+pub mod debugger;
+pub mod expressions;
 pub mod nodes;
 pub mod primitives;
-pub mod expressions;
-pub mod debugger;
 
-use nodes::*;
 use crate::tokenizer::token::{Token, TokenKind};
+use nodes::*;
 
 pub struct Parser<'a> {
     pub pos: usize,
@@ -29,6 +29,10 @@ impl<'a> Parser<'a> {
         self.tks.get(self.pos)
     }
 
+    pub fn next_unwrap(&self) -> &Token {
+        &self.tks[self.pos]
+    }
+
     pub fn next_at(&self, n: usize) -> Option<&Token> {
         self.tks.get(self.pos + n)
     }
@@ -49,18 +53,34 @@ impl<'a> Parser<'a> {
     }
 
     pub fn rollback(&mut self) {
+        if self.pos == 0 {
+            unreachable!()
+        }
+
         self.pos -= 1;
     }
 
     #[inline]
     pub fn make_node(&mut self, f: impl FnOnce(&mut Self) -> Option<NodeKind>) -> Option<Node> {
-        let pos = self.pos;
-        let tok = f(self);
+        let start_token = self.pos;
+        let node = f(self);
+        let end_token = self.pos.saturating_sub(1);
 
-        if let Some(tok) = tok {
+        if node.is_some() && self.pos == start_token {
+            unreachable!("This may be a bug in the parser, node is returned, but no tokens consumed")
+        }
+
+        if let Some(tok) = node {
+            let start = self.tks.get(start_token).map_or(0, |t| t.range.start);
+            let end = self
+                .tks
+                .get(end_token)
+                .map_or(self.src.len(), |t| t.range.end)
+                .max(start);
+
             return Some(Node {
                 kind: tok,
-                range: pos..self.pos,
+                range: start..end,
             });
         }
         None

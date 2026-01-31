@@ -16,11 +16,9 @@ impl Debugger {
             "├── "
         };
 
-        let tokens = &parser.tks[node.range.clone()].iter()
-            .flat_map(|t| parser.get_src(t.range.clone()).iter().copied().chain(std::iter::once(b' ')))
-            .collect::<Vec<u8>>();
+        let tokens = parser.get_src(node.range.clone());
         let kind = &node.kind;
-        println!("{}{}{:?} -> {}", prefix, connector, kind, String::from_utf8_lossy(tokens.as_slice()));
+        println!("{}{}{:?} -> {}", prefix, connector, kind, String::from_utf8_lossy(tokens));
 
         let child_prefix = prefix +
             if is_root {

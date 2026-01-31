@@ -16,6 +16,7 @@ pub enum NodeKind {
 
     // Expressions
     Operation(Operation),
+    Expression(Expression),
 }
 
 #[derive(Debug, Clone)]
@@ -25,19 +26,18 @@ pub struct Node {
 }
 
 impl Node {
-    #[inline]
     pub fn new(kind: NodeKind, range: Range<usize>) -> Self {
         Self { kind, range }
     }
 
-    #[inline]
     pub fn visit_children<'a>(&'a self, visit: impl FnMut(&'a Node)) {
         match &self.kind {
+            NodeKind::Operation(v) => v.visit_children(visit),
+            NodeKind::Expression(v) => v.visit_children(visit),
             _ => (),
         }
     }
 
-    #[inline]
     pub fn has_errors(&self) -> bool {
         match &self.kind {
             NodeKind::IntegerLiteral(v) => v.has_errors(),
@@ -45,7 +45,6 @@ impl Node {
         }
     }
 
-    #[inline]
     pub fn visit_errors(&self, visit: impl FnMut(&'static str)) {
         match &self.kind {
             NodeKind::IntegerLiteral(v) => v.visit_errors(visit),
