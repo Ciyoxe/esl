@@ -153,6 +153,7 @@ impl Parser<'_> {
                 Some(TokenKind::KwLet) => false,
                 _ => return None,
             };
+            this.advance();
             // TODO: add destructuring, like let { x, y, z } = make_vec();
             let decl = this.p_identifier().unwrap_or_else(|| {
                 this.make_error_here(ParsingError::ExpectedDifferentToken {
@@ -179,7 +180,6 @@ impl Parser<'_> {
                 })
             });
 
-            this.advance();
             Some(NodeKind::ValueDeclaration(ValueDeclaration {
                 mutable,
                 error,

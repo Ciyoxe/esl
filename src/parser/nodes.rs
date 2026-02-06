@@ -42,6 +42,9 @@ impl Node {
         match &self.kind {
             NodeKind::Operation(v) => v.visit_children(visit),
             NodeKind::Expression(v) => v.visit_children(visit),
+            NodeKind::ValueDeclaration(v) => v.visit_children(visit),
+            NodeKind::Block(v) => v.visit_children(visit),
+            NodeKind::Assignment(v) => v.visit_children(visit),
             _ => (),
         }
     }
