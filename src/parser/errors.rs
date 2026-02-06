@@ -14,4 +14,6 @@ pub enum ParsingError {
     UnexpectedCallArgument,
     // (a + b ####)
     UnexpectedToken,
+    // var a =; <- Expected expression
+    ExpectedDifferentToken { expected: &'static str }
 }

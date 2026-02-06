@@ -3,6 +3,8 @@ pub mod errors;
 pub mod expressions;
 pub mod nodes;
 pub mod primitives;
+pub mod statements;
+pub mod expressionables;
 
 use crate::tokenizer::token::{Token, TokenKind};
 use errors::*;
@@ -27,23 +29,28 @@ impl<'a> Parser<'a> {
         &self.src[range]
     }
 
+    #[inline(always)]
     pub fn next(&self) -> Option<&Token> {
         self.tks.get(self.pos)
     }
 
+    #[inline(always)]
     pub fn next_unwrap(&self) -> &Token {
         &self.tks[self.pos]
     }
 
+    #[inline(always)]
     pub fn next_at(&self, n: usize) -> Option<&Token> {
         self.tks.get(self.pos + n)
     }
 
+    #[inline(always)]
     pub fn advance(&mut self) -> &Token {
         self.pos += 1;
         &self.tks[self.pos - 1]
     }
 
+    #[inline(always)]
     pub fn advance_on(&mut self, kind: TokenKind) -> bool {
         if let Some(token) = self.next() {
             if token.kind == kind {
@@ -54,6 +61,7 @@ impl<'a> Parser<'a> {
         false
     }
 
+    #[inline(always)]
     pub fn rollback(&mut self) {
         if self.pos == 0 {
             unreachable!()

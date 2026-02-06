@@ -163,7 +163,7 @@ impl Parser<'_> {
                 Operation::FuncCall { args }
                 | Operation::TypeCtor { args }
                 | Operation::ValueCtor { args } => {
-                    let next_nodes = match &this.next_unwrap().kind {
+                    let arg_tokens = match &this.next_unwrap().kind {
                         TokenKind::CurlyBraces { children }
                         | TokenKind::RoundBraces { children }
                         | TokenKind::SquareBraces { children } => children,
@@ -172,7 +172,7 @@ impl Parser<'_> {
                             unreachable!("Call-like operation can be parsed only for braces tokens")
                         }
                     };
-                    args.extend(this.p_args_list(next_nodes));
+                    args.extend(this.p_args_list(arg_tokens));
                 }
 
                 _ => (),

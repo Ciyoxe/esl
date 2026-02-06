@@ -1,4 +1,4 @@
-use crate::tokenizer::token::TokenKind;
+use crate::{parser::errors::ParsingError, tokenizer::token::TokenKind};
 
 use super::nodes::*;
 use crate::parser::Parser;
@@ -6,7 +6,15 @@ use crate::parser::Parser;
 #[derive(Debug, Clone)]
 pub struct IntegerLiteral {
     pub value: u64,
-    pub overflowed: bool,
+    pub error: Option<Box<Node>>,
+}
+
+impl IntegerLiteral {
+    pub fn visit_children<'a>(&'a self, mut visit: impl FnMut(&'a Node)) {
+        if let Some(error) = self.error.as_ref() {
+            visit(error);
+        }
+    }
 }
 
 impl Parser<'_> {
@@ -14,50 +22,56 @@ impl Parser<'_> {
         self.make_node(|this| {
             let literal = match this.next().map(|token| &token.kind) {
                 Some(TokenKind::NumBinInt) => {
-                    let range = this.advance().range.clone();
-                    let bytes = this.get_src(range);
+                    let token = this.advance().clone();
+                    let bytes = this.get_src(token.range.clone());
                     let value = u64::from_str_radix(std::str::from_utf8(bytes).unwrap(), 2);
 
                     match value {
                         Ok(v) => IntegerLiteral {
                             value: v,
-                            overflowed: false,
+                            error: None,
                         },
                         Err(_) => IntegerLiteral {
                             value: 0,
-                            overflowed: true,
+                            error: Some(Box::new(
+                                this.make_error_for_tokens(ParsingError::IntegerOverflow, &[token]),
+                            )),
                         },
                     }
                 }
                 Some(TokenKind::NumHexInt) => {
-                    let range = this.advance().range.clone();
-                    let bytes = this.get_src(range);
+                    let token = this.advance().clone();
+                    let bytes = this.get_src(token.range.clone());
                     let value = u64::from_str_radix(std::str::from_utf8(bytes).unwrap(), 16);
 
                     match value {
                         Ok(v) => IntegerLiteral {
                             value: v,
-                            overflowed: false,
+                            error: None,
                         },
                         Err(_) => IntegerLiteral {
                             value: 0,
-                            overflowed: true,
+                            error: Some(Box::new(
+                                this.make_error_for_tokens(ParsingError::IntegerOverflow, &[token]),
+                            )),
                         },
                     }
                 }
                 Some(TokenKind::NumDecInt) => {
-                    let range = this.advance().range.clone();
-                    let bytes = this.get_src(range);
+                    let token = this.advance().clone();
+                    let bytes = this.get_src(token.range.clone());
                     let value = str::parse::<u64>(std::str::from_utf8(bytes).unwrap());
 
                     match value {
                         Ok(v) => IntegerLiteral {
                             value: v,
-                            overflowed: false,
+                            error: None,
                         },
                         Err(_) => IntegerLiteral {
                             value: 0,
-                            overflowed: true,
+                            error: Some(Box::new(
+                                this.make_error_for_tokens(ParsingError::IntegerOverflow, &[token]),
+                            )),
                         },
                     }
                 }
@@ -161,17 +175,14 @@ impl Parser<'_> {
 #[derive(Debug, Clone)]
 pub struct DontCare {}
 
-
 impl Parser<'_> {
     pub fn p_dont_care(&mut self) -> Option<Node> {
-        self.make_node(|this| {
-            match this.next().map(|token| &token.kind) {
-                Some(TokenKind::Ignore) => {
-                    this.advance();
-                    Some(NodeKind::DontCare(DontCare {}))
-                },
-                _ => None,
+        self.make_node(|this| match this.next().map(|token| &token.kind) {
+            Some(TokenKind::Ignore) => {
+                this.advance();
+                Some(NodeKind::DontCare(DontCare {}))
             }
+            _ => None,
         })
     }
 }
