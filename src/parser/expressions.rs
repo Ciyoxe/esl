@@ -21,19 +21,9 @@ pub enum Operation {
     And, // a & b
     Not, // !a
 
-    Dot,     // a . b
-    Try,     // a ?
-    Ref,     // ref a
-    Typedef, // a : b
-
-    Asg,    // a = b
-    AddAsg, // a += b
-    SubAsg, // a -= b
-    MulAsg, // a *= b
-    DivAsg, // a /= b
-    ModAsg, // a %= b
-    AndAsg, // a &= b
-    OrAsg,  // a |= b
+    Dot, // a . b
+    Try, // a ?
+    Ref, // ref a
 
     FuncCall { args: Vec<Node> },  // Callable( Args... )
     ValueCtor { args: Vec<Node> }, // Type{ ValueArgs... }
@@ -83,15 +73,6 @@ impl Operation {
             TokenKind::OpOr => Some(Self::Or),
             TokenKind::OpAnd => Some(Self::And),
             TokenKind::OpDot => Some(Self::Dot),
-            TokenKind::OpAsg => Some(Self::Asg),
-            TokenKind::OpAddAsg => Some(Self::AddAsg),
-            TokenKind::OpSubAsg => Some(Self::SubAsg),
-            TokenKind::OpMulAsg => Some(Self::MulAsg),
-            TokenKind::OpDivAsg => Some(Self::DivAsg),
-            TokenKind::OpModAsg => Some(Self::ModAsg),
-            TokenKind::OpAndAsg => Some(Self::AndAsg),
-            TokenKind::OpOrAsg => Some(Self::OrAsg),
-            TokenKind::OpTypedef => Some(Self::Typedef),
             _ => None,
         }
     }
@@ -110,15 +91,6 @@ impl Operation {
             Operation::Eq | Operation::Ne => 40,
             Operation::And => 30,
             Operation::Or => 20,
-            Operation::Typedef => 10,
-            Operation::Asg
-            | Operation::AddAsg
-            | Operation::SubAsg
-            | Operation::MulAsg
-            | Operation::DivAsg
-            | Operation::ModAsg
-            | Operation::AndAsg
-            | Operation::OrAsg => 0,
         }
     }
     fn is_prefix(&self) -> bool {

@@ -2,7 +2,8 @@ use std::ops::Range;
 use crate::parser::{
     errors::*,
     expressions::*,
-    primitives::*, statements::ValueDeclaration,
+    primitives::*,
+    statements::{ValueDeclaration, Block, Assignment},
 };
 
 #[derive(Debug, Clone)]
@@ -22,6 +23,8 @@ pub enum NodeKind {
 
     // Statements
     ValueDeclaration(ValueDeclaration),
+    Block(Block),
+    Assignment(Assignment),
 }
 
 #[derive(Debug, Clone)]
