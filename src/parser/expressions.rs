@@ -203,7 +203,8 @@ impl Expression {
 
 impl Parser<'_> {
     fn p_operand(&mut self) -> Option<Node> {
-        self.p_identifier()
+        self.p_lambda()
+            .or_else(|| self.p_identifier())
             .or_else(|| self.p_boolean_literal())
             .or_else(|| self.p_dont_care())
             .or_else(|| self.p_floating_literal())

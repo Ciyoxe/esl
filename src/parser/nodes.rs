@@ -2,6 +2,7 @@ use std::ops::Range;
 use crate::parser::{
     errors::*,
     expressions::*,
+    expressionables::*,
     primitives::*,
     statements::{ValueDeclaration, Block, Assignment},
 };
@@ -25,6 +26,9 @@ pub enum NodeKind {
     ValueDeclaration(ValueDeclaration),
     Block(Block),
     Assignment(Assignment),
+
+    // Expressionables
+    Lambda(Lambda),
 }
 
 #[derive(Debug, Clone)]
@@ -45,6 +49,7 @@ impl Node {
             NodeKind::ValueDeclaration(v) => v.visit_children(visit),
             NodeKind::Block(v) => v.visit_children(visit),
             NodeKind::Assignment(v) => v.visit_children(visit),
+            NodeKind::Lambda(v) => v.visit_children(visit),
             _ => (),
         }
     }
